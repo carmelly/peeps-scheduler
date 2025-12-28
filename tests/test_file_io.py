@@ -987,8 +987,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_with_wrapper(self, tmp_path):
 		"""Test that partnerships file with wrapper object is loaded correctly."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"partnerships": {
@@ -1012,7 +1010,6 @@ class TestPartnershipRequests:
 		assert result == {1: {2, 3}, 2: {1}}
 
 	def test_load_partnerships_requires_mapping(self, tmp_path):
-		import constants
 
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps(["1", "2"]))

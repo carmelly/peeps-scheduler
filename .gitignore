@@ -1,19 +1,21 @@
-# Log files (old debug.log deprecated)
-debug.log
-
-# Logs directory (new logging infrastructure - created automatically)
-/logs/
-*.log
-
-# Python cache and compiled files
+# Python
 __pycache__/
-*.pyc
+*.egg-info/
+build/
+dist/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
 # AI Agent Configuration (symlinked from peeps-config/overlay/)
 /.claude
 /.apm
 CLAUDE.md
-AGENTS.md
+
+# Virtual environment
+.venv
 
 # SQLite database files and related artifacts
 db/*.db
@@ -22,14 +24,12 @@ db/*.sqbpro
 db/backups/*
 **/sqlite3.exe
 
-# Test coverage report 
-.coverage 
-
-# Virtualenv
-.venv
-
 # Repo zip for easy upload
 repo-*.zip
 
 # Node modules
 node_modules/
+
+# Logs
+logs/
+*.log

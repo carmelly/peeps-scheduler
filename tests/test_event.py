@@ -11,7 +11,7 @@ Following testing philosophy:
 import pytest
 import datetime
 from peeps_scheduler.models import Event, Peep, Role
-from peeps_scheduler import constants
+import peeps_scheduler.constants as constants
 
 @pytest.mark.unit
 class TestEventAttendeeManagement:
