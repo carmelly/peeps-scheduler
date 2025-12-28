@@ -3,13 +3,14 @@
 # Uses prettier for formatting and markdownlint for linting
 #
 # Usage:
-#   ./scripts/check-md.sh [--fix] [path]
+#   ./scripts/check-md.sh [--fix|--errors-only] [path]
 #
 # Examples:
 #   ./scripts/check-md.sh                          # Check all markdown
 #   ./scripts/check-md.sh README.md                # Check single file
 #   ./scripts/check-md.sh --fix README.md          # Fix single file
 #   ./scripts/check-md.sh --fix docs/              # Fix directory
+#   ./scripts/check-md.sh --errors-only README.md  # Show errors with line numbers only
 
 set -e
 
@@ -28,22 +29,25 @@ MARKDOWNLINT_CONFIG="$SCRIPT_DIR/.markdownlint-cli2.jsonc"
 
 # Parse arguments
 FIX=false
-TARGET=""
+ERRORS_ONLY=false
+FILES=()
 
 for arg in "$@"; do
     case $arg in
         --fix)
             FIX=true
-            shift
+            ;;
+        --errors-only)
+            ERRORS_ONLY=true
             ;;
         *)
-            TARGET="$arg"
+            FILES+=("$arg")
             ;;
     esac
 done
 
 # Require explicit target when using --fix
-if [ "$FIX" = true ] && [ -z "$TARGET" ]; then
+if [ "$FIX" = true ] && [ ${#FILES[@]} -eq 0 ]; then
     echo -e "${RED}✗${NC} --fix requires an explicit file or directory target"
     echo ""
     echo "Usage:"
@@ -57,8 +61,8 @@ if [ "$FIX" = true ] && [ -z "$TARGET" ]; then
 fi
 
 # Default to current directory for check-only mode
-if [ -z "$TARGET" ]; then
-    TARGET="."
+if [ ${#FILES[@]} -eq 0 ]; then
+    FILES=(".")
 fi
 
 # Check if node_modules exists (in main repo root)
@@ -67,71 +71,113 @@ if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
     (cd "$SCRIPT_DIR" && npm install)
 fi
 
-echo -e "${YELLOW}ℹ${NC} Running markdown validation on: $TARGET"
+# Handle --errors-only mode (skip formatting, just show violations)
+if [ "$ERRORS_ONLY" = true ]; then
+    for file in "${FILES[@]}"; do
+        if [ -f "$file" ]; then
+            $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "$file" 2>&1 | grep "MD" | sed 's/ \[Context:.*\]$//' || true
+        else
+            $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$file/**/*.md" 2>&1 | grep "MD" | sed 's/ \[Context:.*\]$//' || true
+        fi
+    done
+    exit 0
+fi
+
+echo -e "${YELLOW}ℹ${NC} Running markdown validation on: ${FILES[*]}"
 echo ""
+
+# Separate files from directories
+REGULAR_FILES=()
+DIRECTORIES=()
+for item in "${FILES[@]}"; do
+    if [ -f "$item" ]; then
+        REGULAR_FILES+=("$item")
+    elif [ -d "$item" ]; then
+        DIRECTORIES+=("$item")
+    fi
+done
 
 # Run prettier
 if [ "$FIX" = true ]; then
     echo -e "${YELLOW}→${NC} Running prettier (format)..."
-    if [ -f "$TARGET" ]; then
-        $PRETTIER --config "$PRETTIER_CONFIG" --write "$TARGET"
-    else
-        $PRETTIER --config "$PRETTIER_CONFIG" --write "$TARGET/**/*.md"
+    # Process all regular files at once
+    if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+        $PRETTIER --config "$PRETTIER_CONFIG" --write "${REGULAR_FILES[@]}"
     fi
+    # Process directories
+    for dir in "${DIRECTORIES[@]}"; do
+        $PRETTIER --config "$PRETTIER_CONFIG" --write "$dir/**/*.md"
+    done
     echo -e "${GREEN}✓${NC} Prettier formatting complete"
 else
     echo -e "${YELLOW}→${NC} Running prettier (check)..."
-    if [ -f "$TARGET" ]; then
-        $PRETTIER --config "$PRETTIER_CONFIG" --check "$TARGET"
-    else
-        $PRETTIER --config "$PRETTIER_CONFIG" --check "$TARGET/**/*.md"
+    # Process all regular files at once
+    if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+        $PRETTIER --config "$PRETTIER_CONFIG" --check "${REGULAR_FILES[@]}"
     fi
+    # Process directories
+    for dir in "${DIRECTORIES[@]}"; do
+        $PRETTIER --config "$PRETTIER_CONFIG" --check "$dir/**/*.md"
+    done
     echo -e "${GREEN}✓${NC} Prettier check passed"
 fi
 
 echo ""
 
 # Run markdownlint
-# Note: When targeting a specific file, we use a config without globs to avoid
-# processing all markdown files in the project
 if [ "$FIX" = true ]; then
     echo -e "${YELLOW}→${NC} Running markdownlint (fix)..."
-    if [ -f "$TARGET" ]; then
-        # For single files, don't use globs from config - just process the file
-        $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" --fix "$TARGET" || true
-    else
-        # For directories, use the config with globs
-        $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" --fix "$TARGET/**/*.md" || true
+    # Process all regular files at once
+    if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+        $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" --fix "${REGULAR_FILES[@]}" || true
     fi
+    # Process directories
+    for dir in "${DIRECTORIES[@]}"; do
+        $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" --fix "$dir/**/*.md" || true
+    done
     echo -e "${GREEN}✓${NC} Markdownlint auto-fixes applied"
 
     # Check for remaining issues
     echo ""
     echo -e "${YELLOW}→${NC} Checking for remaining issues..."
-    if [ -f "$TARGET" ]; then
-        if $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "$TARGET" 2>&1 | grep -q "MD"; then
-            echo -e "${YELLOW}⚠${NC} Some issues require manual fixes:"
-            $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "$TARGET" || true
-            exit 1
-        else
-            echo -e "${GREEN}✓${NC} All issues fixed!"
+    HAS_ISSUES=false
+    # Check all regular files at once
+    if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+        if $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "${REGULAR_FILES[@]}" 2>&1 | grep -q "MD"; then
+            HAS_ISSUES=true
         fi
+    fi
+    # Check directories
+    for dir in "${DIRECTORIES[@]}"; do
+        if $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$dir/**/*.md" 2>&1 | grep -q "MD"; then
+            HAS_ISSUES=true
+        fi
+    done
+
+    if [ "$HAS_ISSUES" = true ]; then
+        echo -e "${YELLOW}⚠${NC} Some issues require manual fixes:"
+        # Show errors for regular files
+        if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+            $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "${REGULAR_FILES[@]}" || true
+        fi
+        # Show errors for directories
+        for dir in "${DIRECTORIES[@]}"; do
+            $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$dir/**/*.md" || true
+        done
+        exit 1
     else
-        if $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$TARGET/**/*.md" 2>&1 | grep -q "MD"; then
-            echo -e "${YELLOW}⚠${NC} Some issues require manual fixes:"
-            $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$TARGET/**/*.md" || true
-            exit 1
-        else
-            echo -e "${GREEN}✓${NC} All issues fixed!"
-        fi
+        echo -e "${GREEN}✓${NC} All issues fixed!"
     fi
 else
     echo -e "${YELLOW}→${NC} Running markdownlint (check)..."
-    if [ -f "$TARGET" ]; then
-        $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "$TARGET"
-    else
-        $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$TARGET/**/*.md"
+    # Check all regular files at once
+    if [ ${#REGULAR_FILES[@]} -gt 0 ]; then
+        $MARKDOWNLINT --no-globs --config "$MARKDOWNLINT_CONFIG" "${REGULAR_FILES[@]}"
     fi
+    # Check directories
+    for dir in "${DIRECTORIES[@]}"; do
+        $MARKDOWNLINT --config "$MARKDOWNLINT_CONFIG" "$dir/**/*.md"
+    done
     echo -e "${GREEN}✓${NC} Markdownlint check passed"
 fi
 
