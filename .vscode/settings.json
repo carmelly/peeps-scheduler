@@ -1,48 +1,48 @@
 {
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "python.testing.pytestArgs": [ "tests" ],
-    "python.analysis.typeCheckingMode": "off",
-    "[markdown]": { 
-		"editor.formatOnSave": true, 
-		"prettier.proseWrap": "preserve" 
-		},
-    "markdown.styles": [ "./.vscode/markdown-preview.css" ],
-	"markdown.preview.breaks": false,
-    "[json]": {
-        "breadcrumbs.showArrays": true,
-        "editor.quickSuggestions": { "strings": true },
-        "editor.suggest.insertMode": "replace",
-        "editor.defaultFormatter": "GamemodeOne.json-compact-prettier",
-        "editor.formatOnSave": true,
-        "editor.formatOnSaveMode": "file"
-    },
-    "[jsonc]": { "editor.defaultFormatter": "GamemodeOne.json-compact-prettier" },
-    "json-compact-prettier.maxLineLength": 120,
-    "json-compact-prettier.alwaysOpenKeys": [
-        "alternates",
-        "attendees",
-        "permissions",
-        "allow",
-        "deny",
-        "ask",
-        "scripts"
-    ],
-    "[python]": {
-        "editor.defaultFormatter": "charliermarsh.ruff",
-        "editor.formatOnSave": true,
-        "editor.detectIndentation": true
-    },
-    "bookmarks.useWorkaroundForFormatters": true,
-    "prettier.printWidth": 100,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "python.analysis.typeCheckingMode": "off",
+  "[markdown]": {
     "editor.formatOnSave": true,
-    "editor.formatOnSaveMode": "modifications",
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-    "editor.wordWrap": "wordWrapColumn",
-    "editor.wordWrapColumn": 100,
-    "workbench.editor.centeredLayoutAutoResize": true,
-    "workbench.editor.centeredLayoutFixedWidth": true,
-	"workbench.editor.enablePreview": false, 
-	"workbench.editor.enablePreviewFromQuickOpen": false
+    "prettier.proseWrap": "preserve"
+  },
+  "markdown.styles": ["./.vscode/markdown-preview.css"],
+  "markdown.preview.breaks": true,
+  "[json]": {
+    "breadcrumbs.showArrays": true,
+    "editor.quickSuggestions": { "strings": true },
+    "editor.suggest.insertMode": "replace",
+    "editor.defaultFormatter": "GamemodeOne.json-compact-prettier",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file"
+  },
+  "[jsonc]": { "editor.defaultFormatter": "GamemodeOne.json-compact-prettier" },
+  "json-compact-prettier.maxLineLength": 120,
+  "json-compact-prettier.alwaysOpenKeys": [
+    "alternates",
+    "attendees",
+    "permissions",
+    "allow",
+    "deny",
+    "ask",
+    "scripts"
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.detectIndentation": true
+  },
+  "bookmarks.useWorkaroundForFormatters": true,
+  "prettier.printWidth": 100,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "modifications",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.wordWrapColumn": 100,
+  "workbench.editor.centeredLayoutAutoResize": true,
+  "workbench.editor.centeredLayoutFixedWidth": true,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false
 }
