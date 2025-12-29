@@ -1,40 +1,74 @@
-  [build-system]
-  requires = ["setuptools>=61.0"]
-  build-backend = "setuptools.build_meta"
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-  [project]
-  name = "peeps-scheduler"
-  version = "1.1.0"
-  description = "West Coast Swing scheduling system"
-  requires-python = ">=3.8"
+[project]
+name = "peeps-scheduler"
+version = "1.1.0"
+description = "West Coast Swing scheduling system"
+requires-python = ">=3.12"
 
-  [tool.setuptools.packages.find]
-  where = ["src"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
-  [tool.pytest.ini_options]
-  testpaths = ["tests"]
-  pythonpath = ["src"]
-  python_files = ["test_*.py"]
-  python_classes = ["Test*"]
-  python_functions = ["test_*"]
-  addopts = [
-      "-v",
-      "--strict-markers",
-      "--tb=short",
-      "--import-mode=importlib",
-  ]
-  markers = [
-      "unit: marks unit tests that test a single component in isolation",
-      "db: marks database tests that require SQLite database",
-      "integration: marks integration tests that test multiple components together",
-      "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-      "revisit: marks tests that document current behavior but should be changed in the future",
-  ]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+	 "--import-mode=importlib",
+]
+markers = [
+    "unit: marks unit tests that test a single component in isolation",
+    "db: marks database tests that require SQLite database",
+    "integration: marks integration tests that test multiple components together",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "revisit: marks tests that document current behavior but should be changed in the future",
+]
 
-  [tool.ruff]
-  target-version = "py311"
-  src = ["src"]
-  line-length = 100
+[tool.ruff]
+# Target modern Python, adjust if needed
+target-version = "py312"
+src = ["src"]
 
-  [tool.ruff.lint.isort]
-  known-first-party = ["peeps_scheduler"]
+# Reasonable line length, plays well with VS Code
+line-length = 100
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E", "F",     # Default errors/warnings
+    "I",          # Import sorting
+    "UP",         # Python upgrade suggestions
+    "B",          # Common bug patterns
+    "SIM",        # Code simplifications
+    # "PTH",        # Suggests pathlib over os.path
+]
+ignore = [
+  "E203",  # whitespace before ':', conflicts with formatter
+  "E501",  # line length (handled by formatter)
+]
+exclude = [
+  ".git",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["peeps_scheduler"]
+combine-as-imports = true
+lines-between-types = 0
+no-lines-before = ["third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
