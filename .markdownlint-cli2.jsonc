@@ -11,5 +11,5 @@
     "MD004": { "style": "dash" } // ul-style: prefer dashes
   },
   "globs": ["**/*.md"],
-  "ignores": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.venv/**"],
+  "ignores": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.venv/**"]
 }
