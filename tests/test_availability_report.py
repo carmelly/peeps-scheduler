@@ -1,7 +1,5 @@
 import json
-
 import pytest
-
 from peeps_scheduler.availability_report import parse_availability
 from peeps_scheduler.file_io import load_cancellations
 
@@ -18,11 +16,8 @@ def test_parse_availability_applies_cancellations(tmp_path):
     cancellations_content = {
         "cancelled_events": ["Sunday March 2 - 5pm"],
         "cancelled_availability": [
-            {
-                "email": "alex@test.com",
-                "events": ["Saturday March 1 - 5pm"]
-            }
-        ]
+            {"email": "alex@test.com", "events": ["Saturday March 1 - 5pm"]}
+        ],
     }
 
     members_path = tmp_path / "members.csv"
@@ -33,13 +28,15 @@ def test_parse_availability_applies_cancellations(tmp_path):
     responses_path.write_text(responses_content)
     cancellations_path.write_text(json.dumps(cancellations_content))
 
-    cancelled_event_ids, cancelled_availability = load_cancellations(str(cancellations_path), year=2025)
+    cancelled_event_ids, cancelled_availability = load_cancellations(
+        str(cancellations_path), year=2025
+    )
     availability, unavailable, non_responders, _, _ = parse_availability(
         str(responses_path),
         str(members_path),
         cancelled_event_ids=cancelled_event_ids,
         cancelled_availability=cancelled_availability,
-        year=2025
+        year=2025,
     )
 
     assert "Saturday March 1 - 5pm" in availability
@@ -60,11 +57,8 @@ def test_parse_availability_raises_for_unknown_cancellation_email(tmp_path):
     cancellations_content = {
         "cancelled_events": [],
         "cancelled_availability": [
-            {
-                "email": "unknown@test.com",
-                "events": ["Saturday March 1 - 5pm"]
-            }
-        ]
+            {"email": "unknown@test.com", "events": ["Saturday March 1 - 5pm"]}
+        ],
     }
 
     members_path = tmp_path / "members.csv"
@@ -75,12 +69,14 @@ def test_parse_availability_raises_for_unknown_cancellation_email(tmp_path):
     responses_path.write_text(responses_content)
     cancellations_path.write_text(json.dumps(cancellations_content))
 
-    cancelled_event_ids, cancelled_availability = load_cancellations(str(cancellations_path), year=2025)
+    cancelled_event_ids, cancelled_availability = load_cancellations(
+        str(cancellations_path), year=2025
+    )
     with pytest.raises(ValueError, match="unknown email"):
         parse_availability(
             str(responses_path),
             str(members_path),
             cancelled_event_ids=cancelled_event_ids,
             cancelled_availability=cancelled_availability,
-            year=2025
+            year=2025,
         )

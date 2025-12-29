@@ -8,15 +8,14 @@ Following testing philosophy:
 - Fail fast on missing required files
 """
 
-import pytest
-import tempfile
-import os
 import json
+import tempfile
+from pathlib import Path
+import pytest
 from peeps_scheduler import utils
-from peeps_scheduler.models import Peep, Event, Role
-
 
 # --- Fixtures ---
+
 
 @pytest.fixture
 def members_csv_content():
@@ -40,24 +39,24 @@ Bob Wilson,bob@example.com,Leader,None,1,March 1"""
 def actual_attendance_data():
     """Actual attendance JSON - John attended both events, Jane attended one event."""
     return {
-        'valid_events': [
+        "valid_events": [
             {
-                'id': 0,
-                'date': '2025-03-01 19:00',
-                'duration_minutes': 90,
-                'attendees': [
-                    {'id': 1, 'role': 'Leader'},    # John attended
-                    {'id': 2, 'role': 'Follower'}   # Jane attended
-                ]
+                "id": 0,
+                "date": "2025-03-01 19:00",
+                "duration_minutes": 90,
+                "attendees": [
+                    {"id": 1, "role": "Leader"},  # John attended
+                    {"id": 2, "role": "Follower"},  # Jane attended
+                ],
             },
             {
-                'id': 1,
-                'date': '2025-03-08 19:00',
-                'duration_minutes': 90,
-                'attendees': [
-                    {'id': 1, 'role': 'Leader'}     # John attended
-                ]
-            }
+                "id": 1,
+                "date": "2025-03-08 19:00",
+                "duration_minutes": 90,
+                "attendees": [
+                    {"id": 1, "role": "Leader"}  # John attended
+                ],
+            },
         ]
     }
 
@@ -65,32 +64,33 @@ def actual_attendance_data():
 @pytest.fixture
 def temp_files(members_csv_content, responses_csv_content, actual_attendance_data):
     """Create temporary files for testing."""
-    temp_dir = tempfile.mkdtemp()
+    temp_dir = Path(tempfile.mkdtemp())
 
     # Create members.csv
-    members_path = os.path.join(temp_dir, 'members.csv')
-    with open(members_path, 'w') as f:
+    members_path = temp_dir / "members.csv"
+    with members_path.open("w") as f:
         f.write(members_csv_content)
 
     # Create responses.csv
-    responses_path = os.path.join(temp_dir, 'responses.csv')
-    with open(responses_path, 'w') as f:
+    responses_path = temp_dir / "responses.csv"
+    with responses_path.open("w") as f:
         f.write(responses_csv_content)
 
     # Create actual_attendance.json
-    attendance_path = os.path.join(temp_dir, 'actual_attendance.json')
-    with open(attendance_path, 'w') as f:
+    attendance_path = temp_dir / "actual_attendance.json"
+    with attendance_path.open("w") as f:
         json.dump(actual_attendance_data, f)
 
     yield {
-        'temp_dir': temp_dir,
-        'members': members_path,
-        'responses': responses_path,
-        'attendance': attendance_path
+        "temp_dir": temp_dir,
+        "members": members_path,
+        "responses": responses_path,
+        "attendance": attendance_path,
     }
 
     # Cleanup
     import shutil
+
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
@@ -99,35 +99,29 @@ class TestApplyEventResultsErrorHandling:
 
     def test_missing_members_file_raises_error(self, temp_files):
         """Test that missing members.csv raises an error."""
-        os.remove(temp_files['members'])
+        temp_files["members"].unlink()
 
         with pytest.raises(FileNotFoundError):
             utils.apply_event_results(
-                temp_files['attendance'],
-                temp_files['members'],
-                temp_files['responses']
+                temp_files["attendance"], temp_files["members"], temp_files["responses"]
             )
 
     def test_missing_attendance_file_raises_error(self, temp_files):
         """Test that missing actual_attendance.json raises an error."""
-        os.remove(temp_files['attendance'])
+        temp_files["attendance"].unlink()
 
         with pytest.raises(FileNotFoundError):
             utils.apply_event_results(
-                temp_files['attendance'],
-                temp_files['members'],
-                temp_files['responses']
+                temp_files["attendance"], temp_files["members"], temp_files["responses"]
             )
 
     def test_missing_responses_file_handles_gracefully(self, temp_files):
         """Test that missing responses.csv is handled gracefully (responses_csv is optional)."""
-        os.remove(temp_files['responses'])
+        temp_files["responses"].unlink()
 
         # Should not raise an error, just handle gracefully
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         # Should return peeps even without responses file
@@ -135,15 +129,13 @@ class TestApplyEventResultsErrorHandling:
 
         # All peeps should have responded=False since no responses file was processed
         for peep in result_peeps:
-            assert peep.responded == False
+            assert not peep.responded
 
     def test_none_responses_file_handles_gracefully(self, temp_files):
         """Test that None can be passed for responses_csv (responses_csv is optional)."""
         # Should not raise an error when responses_csv is None
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            None
+            temp_files["attendance"], temp_files["members"], None
         )
 
         # Should return peeps even with None responses file
@@ -151,18 +143,17 @@ class TestApplyEventResultsErrorHandling:
 
         # All peeps should have responded=False since no responses file was processed
         for peep in result_peeps:
-            assert peep.responded == False
+            assert not peep.responded
 
     def test_missing_responses_file_logs_debug_message(self, temp_files, caplog):
         """Test that debug message is logged when responses.csv is missing."""
         import logging
-        os.remove(temp_files['responses'])
+
+        temp_files["responses"].unlink()
 
         with caplog.at_level(logging.DEBUG):
             utils.apply_event_results(
-                temp_files['attendance'],
-                temp_files['members'],
-                temp_files['responses']
+                temp_files["attendance"], temp_files["members"], temp_files["responses"]
             )
 
         assert "No responses file provided or file does not exist" in caplog.text
@@ -173,11 +164,7 @@ class TestApplyEventResultsErrorHandling:
         import logging
 
         with caplog.at_level(logging.DEBUG):
-            utils.apply_event_results(
-                temp_files['attendance'],
-                temp_files['members'],
-                None
-            )
+            utils.apply_event_results(temp_files["attendance"], temp_files["members"], None)
 
         assert "No responses file provided or file does not exist" in caplog.text
         assert "skipping response processing" in caplog.text
@@ -189,30 +176,26 @@ class TestRespondedFlagSetting:
     def test_responded_flag_set_for_respondents(self, temp_files):
         """Test that peeps who responded are marked as responded."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         john = next(p for p in result_peeps if p.id == 1)
         bob = next(p for p in result_peeps if p.id == 3)
 
-        assert john.responded == True   # John responded
-        assert bob.responded == True    # Bob responded
+        assert john.responded  # John responded
+        assert bob.responded  # Bob responded
 
     def test_responded_flag_not_set_for_non_respondents(self, temp_files):
         """Test that peeps who didn't respond are not marked as responded."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         jane = next(p for p in result_peeps if p.id == 2)
         alice = next(p for p in result_peeps if p.id == 4)
 
-        assert jane.responded == False   # Jane didn't respond
-        assert alice.responded == False  # Alice didn't respond
+        assert not jane.responded  # Jane didn't respond
+        assert not alice.responded  # Alice didn't respond
 
     def test_email_matching_case_insensitive(self, temp_files):
         """Test that email matching works regardless of case."""
@@ -221,20 +204,18 @@ class TestRespondedFlagSetting:
 John Doe,JOHN@EXAMPLE.COM,Leader,Follower,2,"March 1, March 8"
 Bob Wilson,BOB@EXAMPLE.COM,Leader,None,1,March 1"""
 
-        with open(temp_files['responses'], 'w') as f:
+        with temp_files["responses"].open("w") as f:
             f.write(responses_content)
 
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         john = next(p for p in result_peeps if p.id == 1)
         bob = next(p for p in result_peeps if p.id == 3)
 
-        assert john.responded == True
-        assert bob.responded == True
+        assert john.responded
+        assert bob.responded
 
 
 class TestAttendanceIncrementing:
@@ -243,9 +224,7 @@ class TestAttendanceIncrementing:
     def test_total_attended_incremented_for_attendees(self, temp_files):
         """Test that total_attended is incremented for event attendees."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         john = next(p for p in result_peeps if p.id == 1)
@@ -260,9 +239,7 @@ class TestAttendanceIncrementing:
     def test_total_attended_unchanged_for_non_attendees(self, temp_files):
         """Test that total_attended is unchanged for non-attendees."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         bob = next(p for p in result_peeps if p.id == 3)
@@ -281,9 +258,7 @@ class TestPriorityReset:
     def test_priority_reset_for_attendees(self, temp_files):
         """Test that priority is reset to 0 for peeps who attended events."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         john = next(p for p in result_peeps if p.id == 1)
@@ -300,9 +275,7 @@ class TestPriorityIncrease:
     def test_priority_increased_for_respondents_who_didnt_attend(self, temp_files):
         """Test that priority increases for peeps who responded but didn't attend."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         bob = next(p for p in result_peeps if p.id == 3)
@@ -317,9 +290,7 @@ class TestPriorityUnchanged:
     def test_priority_unchanged_for_non_respondents_who_didnt_attend(self, temp_files):
         """Test that priority stays the same for peeps who didn't respond and didn't attend."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         alice = next(p for p in result_peeps if p.id == 4)
@@ -334,9 +305,7 @@ class TestPeepIndexOrdering:
     def test_index_ordering_updated_after_priority_changes(self, temp_files):
         """Test that peeps are reordered by priority after applying results."""
         result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
+            temp_files["attendance"], temp_files["members"], temp_files["responses"]
         )
 
         # After applying results:
@@ -350,7 +319,7 @@ class TestPeepIndexOrdering:
         john = next(p for p in result_peeps if p.id == 1)
         jane = next(p for p in result_peeps if p.id == 2)
 
-        assert bob.index == 0    # Highest priority
+        assert bob.index == 0  # Highest priority
         assert alice.index == 1
-        assert jane.index == 2   # Attended 1 event
-        assert john.index == 3   # Attended 2 events, most recent attendee
+        assert jane.index == 2  # Attended 1 event
+        assert john.index == 3  # Attended 2 events, most recent attendee

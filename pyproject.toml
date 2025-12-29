@@ -21,7 +21,7 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-	 "--import-mode=importlib",
+     "--import-mode=importlib",
 ]
 markers = [
     "unit: marks unit tests that test a single component in isolation",
@@ -42,12 +42,18 @@ indent-width = 4
 
 [tool.ruff.lint]
 select = [
-    "E", "F",     # Default errors/warnings
-    "I",          # Import sorting
-    "UP",         # Python upgrade suggestions
-    "B",          # Common bug patterns
-    "SIM",        # Code simplifications
-    # "PTH",        # Suggests pathlib over os.path
+  "E", "F",     # Default errors/warnings
+  "I",          # Import sorting
+  "UP",         # Python upgrade suggestions
+  "B",          # Common bug patterns
+  "SIM",        # Code simplifications
+  "PTH",        # Suggests pathlib over os.path
+  "PIE",        # Code quality improvements
+  "RUF",        # Ruff-specific rules
+  "ISC",        # Implicit string concatenation issues   
+# Enable these when we imrpove logging
+# "LOG",        # Logging best practices
+# "T20",        # Catches print() statements in code 
 ]
 ignore = [
   "E203",  # whitespace before ':', conflicts with formatter

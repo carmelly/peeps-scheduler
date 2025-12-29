@@ -8,18 +8,12 @@ Following testing philosophy:
 - Test cross-component integration, not individual unit behavior
 """
 
-import pytest
-import tempfile
-import os
 import json
-import datetime
 import shutil
+import tempfile
 from pathlib import Path
-
-from peeps_scheduler.models import Event, Peep, Role, EventSequence, SwitchPreference
+import pytest
 from peeps_scheduler.scheduler import Scheduler
-from peeps_scheduler import file_io
-from peeps_scheduler import utils
 
 
 class TestEndToEndWorkflows:
@@ -30,24 +24,40 @@ class TestEndToEndWorkflows:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test data with insufficient peeps (60-min events need 2 per role, we have 1 per role)
             test_data = {
-                "events": [
-                    {"id": 0, "date": "2025-03-15 19:00", "duration_minutes": 60}
-                ],
+                "events": [{"id": 0, "date": "2025-03-15 19:00", "duration_minutes": 60}],
                 "peeps": [
                     {
-                        "id": 1, "full_name": "Alice", "display_name": "Alice", "email": "alice@test.com",
-                        "role": "Leader", "index": 0, "priority": 1, "total_attended": 0,
-                        "availability": [0], "event_limit": 1, "min_interval_days": 0,
-                        "switch_pref": 1, "responded": True
+                        "id": 1,
+                        "full_name": "Alice",
+                        "display_name": "Alice",
+                        "email": "alice@test.com",
+                        "role": "Leader",
+                        "index": 0,
+                        "priority": 1,
+                        "total_attended": 0,
+                        "availability": [0],
+                        "event_limit": 1,
+                        "min_interval_days": 0,
+                        "switch_pref": 1,
+                        "responded": True,
                     },
                     {
-                        "id": 2, "full_name": "Bob", "display_name": "Bob", "email": "bob@test.com",
-                        "role": "Follower", "index": 1, "priority": 1, "total_attended": 0,
-                        "availability": [0], "event_limit": 1, "min_interval_days": 0,
-                        "switch_pref": 1, "responded": True
-                    }
+                        "id": 2,
+                        "full_name": "Bob",
+                        "display_name": "Bob",
+                        "email": "bob@test.com",
+                        "role": "Follower",
+                        "index": 1,
+                        "priority": 1,
+                        "total_attended": 0,
+                        "availability": [0],
+                        "event_limit": 1,
+                        "min_interval_days": 0,
+                        "switch_pref": 1,
+                        "responded": True,
+                    },
                 ],
-                "responses": []
+                "responses": [],
             }
 
             # Set up period directory structure (as scheduler.run() expects)
@@ -56,7 +66,7 @@ class TestEndToEndWorkflows:
 
             # Write input data to expected location
             output_json = period_path / "output.json"
-            with open(output_json, 'w') as f:
+            with output_json.open("w") as f:
                 json.dump(test_data, f)
 
             # Run complete scheduler workflow
@@ -69,8 +79,12 @@ class TestEndToEndWorkflows:
             # With impossible constraints, scheduler.run() should:
             # 1. Return None (early return when no sequences found)
             # 2. NOT create results.json file (save_event_sequence never called)
-            assert result is None, f"Expected scheduler.run() to return None with impossible constraints, got {result}"
-            assert not results_json.exists(), "Expected no results.json file created when no sequences can be scheduled"
+            assert result is None, (
+                f"Expected scheduler.run() to return None with impossible constraints, got {result}"
+            )
+            assert not results_json.exists(), (
+                "Expected no results.json file created when no sequences can be scheduled"
+            )
 
     def test_scheduler_handles_impossible_constraints(self):
         """Test complete end-to-end pipeline with extremely impossible attendance constraints."""
@@ -78,23 +92,45 @@ class TestEndToEndWorkflows:
             # Create scenario with 120-min event (needs 6 per role) but only 1 of each role
             test_data = {
                 "events": [
-                    {"id": 1, "date": "2025-03-15 19:00", "duration_minutes": 120}  # Needs 6 leaders + 6 followers
+                    {
+                        "id": 1,
+                        "date": "2025-03-15 19:00",
+                        "duration_minutes": 120,
+                    }  # Needs 6 leaders + 6 followers
                 ],
                 "peeps": [
                     {
-                        "id": 1, "full_name": "OnlyLeader", "display_name": "OnlyLeader", "email": "leader@test.com",
-                        "role": "Leader", "index": 0, "priority": 1, "total_attended": 0,
-                        "availability": [1], "event_limit": 1, "min_interval_days": 0,
-                        "switch_pref": 1, "responded": True
+                        "id": 1,
+                        "full_name": "OnlyLeader",
+                        "display_name": "OnlyLeader",
+                        "email": "leader@test.com",
+                        "role": "Leader",
+                        "index": 0,
+                        "priority": 1,
+                        "total_attended": 0,
+                        "availability": [1],
+                        "event_limit": 1,
+                        "min_interval_days": 0,
+                        "switch_pref": 1,
+                        "responded": True,
                     },
                     {
-                        "id": 2, "full_name": "OnlyFollower", "display_name": "OnlyFollower", "email": "follower@test.com",
-                        "role": "Follower", "index": 1, "priority": 1, "total_attended": 0,
-                        "availability": [1], "event_limit": 1, "min_interval_days": 0,
-                        "switch_pref": 1, "responded": True
-                    }
+                        "id": 2,
+                        "full_name": "OnlyFollower",
+                        "display_name": "OnlyFollower",
+                        "email": "follower@test.com",
+                        "role": "Follower",
+                        "index": 1,
+                        "priority": 1,
+                        "total_attended": 0,
+                        "availability": [1],
+                        "event_limit": 1,
+                        "min_interval_days": 0,
+                        "switch_pref": 1,
+                        "responded": True,
+                    },
                 ],
-                "responses": []
+                "responses": [],
             }
 
             # Set up period directory structure
@@ -103,7 +139,7 @@ class TestEndToEndWorkflows:
 
             # Write input data
             output_json = period_path / "output.json"
-            with open(output_json, 'w') as f:
+            with output_json.open("w") as f:
                 json.dump(test_data, f)
 
             # Run complete scheduler workflow
@@ -116,8 +152,12 @@ class TestEndToEndWorkflows:
             # With extremely impossible constraints (1 peep per role for 120-min event), scheduler.run() should:
             # 1. Return None (early return when no sequences found)
             # 2. NOT create results.json file (save_event_sequence never called)
-            assert result is None, f"Expected scheduler.run() to return None with impossible constraints, got {result}"
-            assert not results_json.exists(), "Expected no results.json file created when constraints are impossible to meet"
+            assert result is None, (
+                f"Expected scheduler.run() to return None with impossible constraints, got {result}"
+            )
+            assert not results_json.exists(), (
+                "Expected no results.json file created when constraints are impossible to meet"
+            )
 
     def test_scheduler_run_golden_master(self):
         """Test complete CSV-to-JSON-to-scheduler pipeline with golden master data.
@@ -136,7 +176,7 @@ class TestEndToEndWorkflows:
             # Load expected results from 2025-09-sanitized data
             golden_master_dir = Path(__file__).parent / "golden_master_2025_09_sanitized"
 
-            with open(golden_master_dir / "results.json", 'r') as f:
+            with (golden_master_dir / "results.json").open() as f:
                 expected_results = json.load(f)
 
             # Set up period directory structure as scheduler expects
@@ -166,21 +206,27 @@ class TestEndToEndWorkflows:
             assert result_json.exists(), "results.json should be created for successful scheduling"
 
             # Load expected and actual files for comparison
-            with open(golden_master_dir / "output.json", 'r') as f:
+            with (golden_master_dir / "output.json").open() as f:
                 expected_output = json.load(f)
-            with open(output_json, 'r') as f:
+            with output_json.open() as f:
                 actual_output = json.load(f)
 
-            with open(golden_master_dir / "results.json", 'r') as f:
+            with (golden_master_dir / "results.json").open() as f:
                 expected_results = json.load(f)
-            with open(result_json, 'r') as f:
+            with result_json.open() as f:
                 actual_results = json.load(f)
 
             # File-based integration test: generated files should match golden master exactly
-            assert actual_output == expected_output, "Generated output.json should match golden master"
-            assert actual_results == expected_results, "Generated results.json should match golden master"
+            assert actual_output == expected_output, (
+                "Generated output.json should match golden master"
+            )
+            assert actual_results == expected_results, (
+                "Generated results.json should match golden master"
+            )
 
-            print("Golden master integration test passed: CSV -> JSON -> Scheduler pipeline produces identical results")
+            print(
+                "Golden master integration test passed: CSV -> JSON -> Scheduler pipeline produces identical results"
+            )
 
 
 class TestCancellationsWorkflow:
@@ -242,16 +288,16 @@ class TestCancellationsWorkflow:
                     "Friday March 7 - 5pm to 6pm"  # Doesn't exist in responses
                 ],
                 "cancelled_availability": [],
-                "notes": "User mistakenly cancelled non-existent event"
+                "notes": "User mistakenly cancelled non-existent event",
             }
             cancelled_path = period_path / "cancellations.json"
-            with open(cancelled_path, 'w') as f:
+            with cancelled_path.open("w") as f:
                 json.dump(cancelled_events_content, f)
 
             # Run scheduler should raise error
             scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
 
-            with pytest.raises(ValueError, match="cancelled event.*not found|unknown.*cancelled"):
+            with pytest.raises(ValueError, match=r"cancelled event.*not found|unknown.*cancelled"):
                 scheduler.run(load_from_csv=True)
 
     def test_scheduler_skips_cancelled_events(self):
@@ -305,14 +351,12 @@ class TestCancellationsWorkflow:
 
             # Create cancellations.json with one event cancelled
             cancelled_events_content = {
-                "cancelled_events": [
-                    "Sunday March 2 - 5pm"
-                ],
+                "cancelled_events": ["Sunday March 2 - 5pm"],
                 "cancelled_availability": [],
-                "notes": "Instructor unavailable - notified members on 2025-02-15"
+                "notes": "Instructor unavailable - notified members on 2025-02-15",
             }
             cancelled_path = period_path / "cancellations.json"
-            with open(cancelled_path, 'w') as f:
+            with cancelled_path.open("w") as f:
                 json.dump(cancelled_events_content, f)
 
             # Run scheduler
@@ -320,17 +364,21 @@ class TestCancellationsWorkflow:
             result = scheduler.run(load_from_csv=True)
 
             # Verify scheduler succeeded
-            assert result is not None, "Scheduler should succeed with valid data and valid cancelled events"
+            assert result is not None, (
+                "Scheduler should succeed with valid data and valid cancelled events"
+            )
 
             # Verify output.json exists and contains BOTH events
             output_json = period_path / "output.json"
             assert output_json.exists(), "output.json should be created"
 
-            with open(output_json, 'r') as f:
+            with output_json.open() as f:
                 output_data = json.load(f)
 
             output_events = output_data.get("events", [])
-            assert len(output_events) == 2, f"output.json should preserve both events, got {len(output_events)}"
+            assert len(output_events) == 2, (
+                f"output.json should preserve both events, got {len(output_events)}"
+            )
 
             # Events are stored by date format in output.json
             event_dates = [e.get("date") for e in output_events]
@@ -340,12 +388,16 @@ class TestCancellationsWorkflow:
             results_json = period_path / "results.json"
             assert results_json.exists(), "results.json should be created"
 
-            with open(results_json, 'r') as f:
+            with results_json.open() as f:
                 results_data = json.load(f)
 
             results_events = results_data.get("valid_events", [])
-            assert len(results_events) == 1, f"results.json should have 1 event (cancelled filtered), got {len(results_events)}"
-            assert len(results_events[0]["attendees"]) == 6, "Non-cancelled event should have 6 attendees"
+            assert len(results_events) == 1, (
+                f"results.json should have 1 event (cancelled filtered), got {len(results_events)}"
+            )
+            assert len(results_events[0]["attendees"]) == 6, (
+                "Non-cancelled event should have 6 attendees"
+            )
 
     def test_scheduler_works_without_cancellations_json(self):
         """Test scheduling when cancellations.json doesn't exist.
@@ -404,14 +456,18 @@ class TestCancellationsWorkflow:
             results_json = period_path / "results.json"
             assert results_json.exists(), "results.json should be created"
 
-            with open(results_json, 'r') as f:
+            with results_json.open() as f:
                 results_data = json.load(f)
 
             results_events = results_data.get("valid_events", [])
-            assert len(results_events) == 2, f"Without cancellations.json, both events should be scheduled. Got {len(results_events)}"
+            assert len(results_events) == 2, (
+                f"Without cancellations.json, both events should be scheduled. Got {len(results_events)}"
+            )
 
             # Just verify we have 2 events scheduled (no filtering without cancellations.json)
-            assert len(results_events) == 2, "Both events should be scheduled without cancellations.json"
+            assert len(results_events) == 2, (
+                "Both events should be scheduled without cancellations.json"
+            )
 
     def test_scheduler_skips_cancelled_availability(self):
         """Test that cancelled availability prevents scheduling for that event."""
@@ -453,15 +509,12 @@ class TestCancellationsWorkflow:
             cancellations_content = {
                 "cancelled_events": [],
                 "cancelled_availability": [
-                    {
-                        "email": "alex@test.com",
-                        "events": ["Saturday March 1 - 5pm"]
-                    }
+                    {"email": "alex@test.com", "events": ["Saturday March 1 - 5pm"]}
                 ],
-                "notes": "Alex is no longer available"
+                "notes": "Alex is no longer available",
             }
             cancelled_path = period_path / "cancellations.json"
-            with open(cancelled_path, 'w') as f:
+            with cancelled_path.open("w") as f:
                 json.dump(cancellations_content, f)
 
             scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
@@ -470,7 +523,7 @@ class TestCancellationsWorkflow:
             assert result is not None, "Scheduler should succeed with cancelled availability"
 
             results_json = period_path / "results.json"
-            with open(results_json, 'r') as f:
+            with results_json.open() as f:
                 results_data = json.load(f)
 
             attendees = results_data["valid_events"][0]["attendees"]
@@ -502,16 +555,13 @@ class TestCancellationsWorkflow:
             cancellations_content = {
                 "cancelled_events": [],
                 "cancelled_availability": [
-                    {
-                        "email": "unknown@test.com",
-                        "events": ["Saturday March 1 - 5pm"]
-                    }
-                ]
+                    {"email": "unknown@test.com", "events": ["Saturday March 1 - 5pm"]}
+                ],
             }
             cancelled_path = period_path / "cancellations.json"
-            with open(cancelled_path, 'w') as f:
+            with cancelled_path.open("w") as f:
                 json.dump(cancellations_content, f)
 
             scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-            with pytest.raises(ValueError, match="unknown email|cancelled availability"):
+            with pytest.raises(ValueError, match=r"unknown email|cancelled availability"):
                 scheduler.run(load_from_csv=True)
