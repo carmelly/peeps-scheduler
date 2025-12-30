@@ -42,4 +42,25 @@ else
 fi
 
 echo ""
+
+# Check for virtual environment and install dependencies
+if [ -d ".venv" ]; then
+    print_status "info" "Installing Python dependencies..."
+    source .venv/bin/activate
+    if [ -f "pyproject.toml" ]; then
+        if pip install -e . > /dev/null 2>&1; then
+            print_status "success" "Production dependencies installed"
+        else
+            print_status "error" "Failed to install dependencies"
+            exit 1
+        fi
+    else
+        print_status "info" "No pyproject.toml found"
+    fi
+else
+    print_status "info" "No virtual environment found, skipping dependency installation"
+    print_status "info" "Run: python3 -m venv .venv && source .venv/bin/activate"
+fi
+
+echo ""
 print_status "success" "Setup complete!"

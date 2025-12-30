@@ -7,6 +7,17 @@ name = "peeps-scheduler"
 version = "1.1.0"
 description = "West Coast Swing scheduling system"
 requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
+    "coverage>=7.13.0",
+    "ruff>=0.14.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
