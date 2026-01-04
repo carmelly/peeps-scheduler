@@ -180,7 +180,7 @@ class TestEndToEndWorkflows:
                 expected_results = json.load(f)
 
             # Set up period directory structure as scheduler expects
-            period_path = Path(temp_dir) / "test_period"
+            period_path = Path(temp_dir) / "2025-test_period"
             period_path.mkdir()
 
             # Step 1: Copy CSV files from golden master for true end-to-end testing
@@ -203,6 +203,9 @@ class TestEndToEndWorkflows:
             # Verify generated files match golden master exactly
             output_json = period_path / "output.json"
             result_json = period_path / "results.json"
+
+            print(output_json)
+            print(result_json)
 
             assert output_json.exists(), "output.json should be created during CSV conversion"
             assert result_json.exists(), "results.json should be created for successful scheduling"

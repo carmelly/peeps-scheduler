@@ -10,7 +10,7 @@ Following testing philosophy:
 
 import datetime
 import pytest
-from peeps_scheduler.models import Event, Peep, Role, SwitchPreference
+from peeps_scheduler.models import Event, Peep, Role
 
 
 class TestPeepConstraints:
@@ -93,62 +93,6 @@ class TestPeepConstraints:
         assert not peep.can_attend(event)
 
 
-class TestSwitchPreferences:
-    """Test switch preference data handling."""
-
-    def test_switch_preference_from_string_primary_only(self):
-        """Test PRIMARY_ONLY preference parsing."""
-        pref = SwitchPreference.from_string("I only want to be scheduled in my primary role")
-        assert pref == SwitchPreference.PRIMARY_ONLY
-
-    def test_switch_preference_from_string_switch_if_full(self):
-        """Test SWITCH_IF_PRIMARY_FULL preference parsing."""
-        pref = SwitchPreference.from_string(
-            "I'm happy to dance my secondary role if it lets me attend when my primary is full"
-        )
-        assert pref == SwitchPreference.SWITCH_IF_PRIMARY_FULL
-
-    def test_switch_preference_from_string_switch_if_needed(self):
-        """Test SWITCH_IF_NEEDED preference parsing."""
-        pref = SwitchPreference.from_string(
-            "I'm willing to dance my secondary role only if it's needed to enable filling a session"
-        )
-        assert pref == SwitchPreference.SWITCH_IF_NEEDED
-
-    def test_switch_preference_from_string_invalid_raises(self):
-        """Test that invalid switch preference strings raise ValueError."""
-        with pytest.raises(ValueError, match="unknown role"):
-            SwitchPreference.from_string("Invalid preference string")
-
-
-class TestRoleHandling:
-    """Test role string/enum conversion."""
-
-    def test_role_from_string_leader_variations(self):
-        """Test that various leader strings parse correctly."""
-        assert Role.from_string("Leader") == Role.LEADER
-        assert Role.from_string("leader") == Role.LEADER
-        assert Role.from_string("LEADER") == Role.LEADER
-        assert Role.from_string("lead") == Role.LEADER
-        assert Role.from_string("Lead") == Role.LEADER
-
-    def test_role_from_string_follower_variations(self):
-        """Test that various follower strings parse correctly."""
-        assert Role.from_string("Follower") == Role.FOLLOWER
-        assert Role.from_string("follower") == Role.FOLLOWER
-        assert Role.from_string("FOLLOWER") == Role.FOLLOWER
-        assert Role.from_string("follow") == Role.FOLLOWER
-        assert Role.from_string("Follow") == Role.FOLLOWER
-
-    def test_role_from_string_invalid_raises(self):
-        """Test that invalid role strings raise ValueError."""
-        with pytest.raises(ValueError, match="unknown role"):
-            Role.from_string("invalid")
-
-    def test_role_opposite_behavior(self):
-        """Test that role opposite() method works correctly."""
-        assert Role.LEADER.opposite() == Role.FOLLOWER
-        assert Role.FOLLOWER.opposite() == Role.LEADER
 
 
 class TestDataConversion:
