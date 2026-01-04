@@ -7,6 +7,7 @@ dist/
 # Testing
 .pytest_cache/
 .coverage
+lcov.info
 htmlcov/
 
 # AI Agent Configuration (symlinked from peeps-config/overlay/)
