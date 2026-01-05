@@ -9,7 +9,12 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from peeps_scheduler.validation.fields import EmailAddressStr, PersonNameStr, RoleEnum
+from peeps_scheduler.validation.fields import (
+    OptionalEmailAddressStr,
+    OptionalPersonNameStr,
+    PersonNameStr,
+    RoleEnum,
+)
 from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
 
 
@@ -18,8 +23,8 @@ class MemberCsvRowSchema(BaseModel):
 
     id: PositiveInt = Field(alias="id")
     full_name: PersonNameStr = Field(alias="Name")
-    display_name: PersonNameStr | None = Field(default=None, alias="Display Name")
-    email_address: EmailAddressStr = Field(alias="Email Address")
+    display_name: OptionalPersonNameStr = Field(default=None, alias="Display Name")
+    email_address: OptionalEmailAddressStr = Field(default=None, alias="Email Address")
     role: RoleEnum = Field(alias="Role")
 
     index: NonNegativeInt = Field(alias="Index")
@@ -28,15 +33,6 @@ class MemberCsvRowSchema(BaseModel):
 
     active: bool = Field(alias="Active")
     date_joined: date = Field(alias="Date Joined")
-
-    @field_validator("display_name", mode="before")
-    @classmethod
-    def coerce_empty_display_name_to_none(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, str) and not v.strip():
-            return None
-        return v
 
     @field_validator("date_joined", mode="before")
     @classmethod
@@ -61,9 +57,7 @@ class MembersCsvFileSchema(RootModel[list[MemberCsvRowSchema]]):
         indices = [row.index for row in rows]
         validate_unique(indices, msg="duplicate index")
 
-        emails = [
-            normalize_email_for_match(row.email_address) for row in rows if row.email_address
-        ]
+        emails = [normalize_email_for_match(row.email_address) for row in rows if row.email_address]
         validate_unique(emails, msg="duplicate email")
 
         names = [row.full_name.casefold() for row in rows if row.full_name]
@@ -76,4 +70,12 @@ class MembersCsvFileSchema(RootModel[list[MemberCsvRowSchema]]):
         ]
         validate_unique(display_names, msg="duplicate display name")
 
+        return self
+
+    @model_validator(mode="after")
+    def validate_active_member_email(self):
+        rows = self.root
+        for row in rows:
+            if row.active and row.email_address is None:
+                raise ValueError("active members must have an email address")
         return self

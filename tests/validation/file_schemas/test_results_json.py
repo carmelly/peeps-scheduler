@@ -7,39 +7,7 @@ from peeps_scheduler.validation.file_schemas.results_json import (
     ResultsJsonSchema,
 )
 from tests.validation.conftest import assert_error_for_model
-
-
-def attendance_event_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "id": 4,
-        "date": "2020-01-04 13:00",
-        "duration_minutes": 120,
-        "attendees": [
-            {"id": 38, "name": "Alice", "role": "leader"},
-            {"id": 25, "name": "Bob", "role": "follower"},
-        ],
-    }
-    return {**defaults, **(overrides or {})}
-
-
-def result_event_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        **attendance_event_data(),
-        "alternates": [
-            {"id": 41, "name": "Dave", "role": "leader"},
-            {"id": 27, "name": "Eve", "role": "follower"},
-        ],
-    }
-    return {**defaults, **(overrides or {})}
-
-
-def results_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "valid_events": [result_event_data()],
-        "num_unique_attendees": 2,
-        "system_weight": 10,
-    }
-    return {**defaults, **(overrides or {})}
+from tests.validation.fixtures import result_event_data, results_data
 
 
 @pytest.mark.unit

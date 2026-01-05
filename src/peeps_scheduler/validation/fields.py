@@ -10,6 +10,7 @@ from peeps_scheduler.validation.parsers import (
     EventSpec,
     parse_event_datetime,
     parse_event_name,
+    parse_role,
 )
 
 MAX_PERSON_NAME_LENGTH = 100
@@ -82,11 +83,25 @@ def validate_event_durations(v: list[EventSpec]):
     return v
 
 
+def coerce_empty_to_none(v: str | None) -> str | None:
+    """Convert empty or whitespace-only strings to None.
+
+    Used as a BeforeValidator for optional string fields to normalize empty inputs.
+    """
+    if v is None:
+        return None
+    if isinstance(v, str) and not v.strip():
+        return None
+    return v
+
+
 def validate_role(v):
     """Parse role value into Role enum, rejecting empty strings."""
+    if v is None:
+        return None
     if isinstance(v, str) and not v.strip():
         raise ValueError("Role must not be empty")
-    return Role.from_string(v)  # will raise ValueError if invalid
+    return parse_role(v)
 
 
 def validate_person_name(v):
@@ -120,6 +135,8 @@ PersonNameStr = Annotated[
     AfterValidator(validate_person_name),
 ]
 EmailAddressStr = Annotated[EmailStr, StringConstraints(max_length=MAX_EMAIL_LENGTH)]
+OptionalPersonNameStr = Annotated[PersonNameStr | None, BeforeValidator(coerce_empty_to_none)]
+OptionalEmailAddressStr = Annotated[EmailAddressStr | None, BeforeValidator(coerce_empty_to_none)]
 EventNameOldFormatStr = Annotated[
     str,
     BeforeValidator(require_context),

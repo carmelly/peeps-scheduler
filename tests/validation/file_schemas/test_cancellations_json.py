@@ -4,25 +4,7 @@ from peeps_scheduler.validation.file_schemas.cancellations_json import (
     CancelledEventJsonSchema,
 )
 from peeps_scheduler.validation.parsers import EventSpec, parse_event_name
-
-
-def cancellations_data(overrides: dict | None = None) -> dict:
-    """Factory for valid cancellations JSON test data."""
-    defaults = {
-        "cancelled_events": [
-            "Friday January 10th - 5:30pm to 7pm",  # new format
-        ],
-        "cancelled_availability": [
-            {
-                "email": "alice@test.com",
-                "events": [
-                    "Saturday January 4 - 1pm",  # old format
-                    "Friday January 10th - 3pm",  # old with ordinal suffix
-                ],
-            }
-        ],
-    }
-    return {**defaults, **(overrides or {})}
+from tests.validation.fixtures import cancellations_data
 
 
 @pytest.mark.unit

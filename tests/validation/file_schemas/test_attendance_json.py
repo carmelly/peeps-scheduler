@@ -8,26 +8,7 @@ from peeps_scheduler.validation.file_schemas.attendance_json import (
     RosterEntryJsonSchema,
 )
 from tests.validation.conftest import assert_error_for_model
-
-
-def attendance_event_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "id": 4,
-        "date": "2020-01-04 13:00",
-        "duration_minutes": 120,
-        "attendees": [
-            {"id": 38, "name": "Alice", "role": "leader"},
-            {"id": 25, "name": "Bob", "role": "follower"},
-        ],
-    }
-    return {**defaults, **(overrides or {})}
-
-
-def attendance_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "valid_events": [attendance_event_data()],
-    }
-    return {**defaults, **(overrides or {})}
+from tests.validation.fixtures import attendance_event_data, attendance_data
 
 
 @pytest.mark.unit

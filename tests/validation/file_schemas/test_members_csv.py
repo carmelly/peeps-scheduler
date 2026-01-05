@@ -6,24 +6,9 @@ from peeps_scheduler.validation.file_schemas.members_csv import (
     MembersCsvFileSchema,
 )
 from tests.validation.conftest import assert_error_for_field, assert_error_for_model
+from tests.validation.fixtures import member_data
 
 pytestmark = pytest.mark.unit
-
-
-def member_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "id": "1",
-        "Name": "Alice Alpha",
-        "Display Name": "Alice",
-        "Email Address": "alice@test.com",
-        "Role": "Leader",
-        "Index": "0",
-        "Priority": "1",
-        "Total Attended": "0",
-        "Active": "TRUE",
-        "Date Joined": "1/1/2020",
-    }
-    return {**defaults, **(overrides or {})}
 
 
 class TestMemberCsvRowSchema:
@@ -160,3 +145,35 @@ class TestMembersCsvFileSchema:
             )
 
         assert_error_for_model(e.value.errors(), "duplicate display name")
+
+    def test_active_member_without_email_raises(self, ctx):
+        """Error case: Active member with empty email should fail validation."""
+        with pytest.raises(ValidationError) as e:
+            MembersCsvFileSchema.model_validate(
+                [
+                    member_data({
+                        "id": "1",
+                        "Index": "0",
+                        "Active": "TRUE",
+                        "Email Address": "",
+                    }),
+                ],
+                context={"ctx": ctx},
+            )
+        assert_error_for_model(e.value.errors(), "email")
+
+    def test_inactive_member_without_email_passes(self, ctx):
+        """Edge case: Inactive member without email should pass validation."""
+        schema = MembersCsvFileSchema.model_validate(
+            [
+                member_data({
+                    "id": "1",
+                    "Index": "0",
+                    "Active": "FALSE",
+                    "Email Address": "",
+                }),
+            ],
+            context={"ctx": ctx},
+        )
+        assert len(schema.root) == 1
+        assert schema.root[0].active is False

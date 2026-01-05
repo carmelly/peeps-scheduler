@@ -1,6 +1,12 @@
 from datetime import datetime
 import pytest
-from peeps_scheduler.validation.parsers import EventSpec, parse_event_name
+from peeps_scheduler.models import Role, SwitchPreference
+from peeps_scheduler.validation.parsers import (
+    EventSpec,
+    parse_event_name,
+    parse_role,
+    parse_switch_preference,
+)
 
 
 @pytest.mark.unit
@@ -82,3 +88,113 @@ class TestParseEventName:
         event_name = "Saturday January 4 - 1pm to invalid"
         with pytest.raises(ValueError, match=r"invalid event duration"):
             parse_event_name(event_name, ctx.year, ctx.tz)
+
+
+@pytest.mark.unit
+class TestParseRole:
+    """Test parser function parse_role()."""
+
+    @pytest.mark.parametrize(
+        "input_value,expected",
+        [
+            ("leader", Role.LEADER),
+            ("LEADER", Role.LEADER),
+            ("lead", Role.LEADER),
+            ("follower", Role.FOLLOWER),
+            ("FOLLOWER", Role.FOLLOWER),
+            ("follow", Role.FOLLOWER),
+        ],
+    )
+    def test_valid_role_case_variations(self, input_value, expected):
+        """Test parsing of valid role strings with various case combinations."""
+        result = parse_role(input_value)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "input_value",
+        [
+            "  leader  ",
+            "  LEADER  ",
+            "\tlead\t",
+            " \t follower \n ",
+        ],
+    )
+    def test_valid_role_with_whitespace(self, input_value):
+        """Test that whitespace is properly handled in role parsing."""
+        result = parse_role(input_value)
+        assert result in (Role.LEADER, Role.FOLLOWER)
+
+    @pytest.mark.parametrize(
+        "invalid_input",
+        [
+            "invalid",
+            "dancer",
+            "LID",
+            "foo",
+            "",
+            "   ",
+            "lead er",
+            "followerss",
+        ],
+    )
+    def test_invalid_role_raises(self, invalid_input):
+        """Test that invalid role input raises ValueError."""
+        with pytest.raises(ValueError):
+            parse_role(invalid_input)
+
+
+@pytest.mark.unit
+class TestParseSwitchPreference:
+    """Test parser function parse_switch_preference()."""
+
+    PRIMARY_ONLY_STR = "I only want to be scheduled in my primary role"
+    SWITCH_IF_PRIMARY_FULL_STR = "I'm happy to dance my secondary role if it lets me attend when my primary is full"
+    SWITCH_IF_NEEDED_STR = "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+
+    @pytest.mark.parametrize(
+        "input_value,expected",
+        [
+            (PRIMARY_ONLY_STR, SwitchPreference.PRIMARY_ONLY),
+            (SWITCH_IF_PRIMARY_FULL_STR, SwitchPreference.SWITCH_IF_PRIMARY_FULL),
+            (SWITCH_IF_NEEDED_STR, SwitchPreference.SWITCH_IF_NEEDED),
+        ],
+    )
+    def test_valid_switch_preference_exact_match(self, input_value, expected):
+        """Test parsing of exact switch preference strings."""
+        result = parse_switch_preference(input_value)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "input_value",
+        [
+            f"  {PRIMARY_ONLY_STR}  ",
+            f"\t{SWITCH_IF_PRIMARY_FULL_STR}\n",
+            f" {SWITCH_IF_NEEDED_STR} ",
+        ],
+    )
+    def test_valid_switch_preference_with_whitespace(self, input_value):
+        """Test that whitespace is properly handled."""
+        result = parse_switch_preference(input_value)
+        assert result in (
+            SwitchPreference.PRIMARY_ONLY,
+            SwitchPreference.SWITCH_IF_PRIMARY_FULL,
+            SwitchPreference.SWITCH_IF_NEEDED,
+        )
+
+    @pytest.mark.parametrize(
+        "invalid_input",
+        [
+            "invalid preference",
+            "I only want to be scheduled in my primary",  # Incomplete
+            "I only want to be scheduled in my PRIMARY ROLE",  # Case variation
+            "I'm happy to dance my secondary role",  # Incomplete
+            "willing to dance",  # Completely wrong
+            "",
+            "   ",
+            "primary only",  # Case variation
+        ],
+    )
+    def test_invalid_switch_preference_raises(self, invalid_input):
+        """Test that invalid switch preference input raises ValueError."""
+        with pytest.raises(ValueError):
+            parse_switch_preference(invalid_input)

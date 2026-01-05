@@ -13,11 +13,12 @@ from peeps_scheduler.validation.fields import (
     EmailAddressStr,
     EventNameOldFormatStr,
     EventSpecList,
+    OptionalPersonNameStr,
     PersonNameStr,
     RoleEnum,
 )
 from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
-from peeps_scheduler.validation.parsers import parse_event_name
+from peeps_scheduler.validation.parsers import parse_event_name, parse_switch_preference
 
 
 class ResponseCsvRowSchema(BaseModel):
@@ -34,18 +35,9 @@ class ResponseCsvRowSchema(BaseModel):
     min_interval_days: NonNegativeInt = Field(alias="Min Interval Days")
 
     # Optional fields
-    display_name: PersonNameStr | None = Field(alias="Display Name", default=None)
+    display_name: OptionalPersonNameStr = Field(alias="Display Name", default=None)
     secondary_role: SwitchPreference | None = Field(alias="Secondary Role", default=None)
     availability: EventSpecList = Field(alias="Availability")
-
-    @field_validator("display_name", mode="before")
-    @classmethod
-    def coerce_empty_display_name_to_none(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, str) and not v.strip():
-            return None
-        return v
 
     @field_validator("timestamp", mode="before")
     @classmethod
@@ -66,7 +58,7 @@ class ResponseCsvRowSchema(BaseModel):
             return None
         if not isinstance(v, str):
             raise ValueError("Secondary Role must be a string")
-        return SwitchPreference.from_string(v)  # will raise ValueError if invalid
+        return parse_switch_preference(v)
 
     @field_validator("availability", mode="after")
     @classmethod
@@ -100,26 +92,37 @@ class ResponsesCsvFileSchema(BaseModel):
     responses: list[ResponseCsvRowSchema]
     event_rows: list[EventRowCsvSchema] | None = None
 
-    @model_validator(mode="after")
-    def validate_consistency(self):
-        emails = [
-            normalize_email_for_match(row.email_address)
-            for row in self.responses
-            if row.email_address
-        ]
+    @field_validator("responses", mode="after")
+    @classmethod
+    def validate_unique_emails(cls, v):
+        """Ensure all email addresses in responses are unique."""
+        emails = [normalize_email_for_match(row.email_address) for row in v if row.email_address]
         validate_unique(emails, msg="duplicate email")
+        return v
 
-        if self.event_rows:
-            starts = [row.start_dt for row in self.event_rows if row.start_dt]
+    @field_validator("event_rows", mode="after")
+    @classmethod
+    def validate_unique_event_rows(cls, v):
+        """If event_rows exist, ensure all event starts are unique."""
+        if v:
+            starts = [row.start_dt for row in v if row.start_dt]
             validate_unique(starts, msg="duplicate event start")
+        return v
 
+    @model_validator(mode="after")
+    def validate_availability_format(self):
+        """If event_rows exist, ensure availability uses old format (no duration)."""
+        if self.event_rows:
             for response in self.responses:
                 for parsed in response.availability:
                     if parsed.duration_minutes is not None:
-                        raise ValueError(
-                            "availability must use old format when event rows exist"
-                        )
+                        raise ValueError("availability must use old format when event rows exist")
+        return self
 
+    @model_validator(mode="after")
+    def validate_events_exist_in_event_rows(self):
+        """If event_rows exist, ensure all events in responses exist in event_rows."""
+        if self.event_rows:
             event_row_starts = {row.start_dt for row in self.event_rows if row.start_dt}
             unknown_availability = []
             for response in self.responses:

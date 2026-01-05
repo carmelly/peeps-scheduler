@@ -39,11 +39,12 @@ addopts = [
   "--cov-report=lcov:lcov.info",
 ]
 markers = [
-  "unit: marks unit tests that test a single component in isolation",
-  "db: marks database tests that require SQLite database",
-  "integration: marks integration tests that test multiple components together",
-  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-  "revisit: marks tests that document current behavior but should be changed in the future",
+  "unit: unit tests that test a single component in isolation",
+  "contract: cross-layer boundary tests",
+  "db: database tests that require SQLite database",
+  "integration: integration tests that test multiple components together",
+  "slow: tests that run slow, often integration or e2e (deselect with '-m \"not slow\"')",
+  "revisit: tests that document current behavior but should be changed in the future",
 ]
 
 [tool.ruff]

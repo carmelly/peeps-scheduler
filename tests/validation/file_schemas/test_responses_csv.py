@@ -8,31 +8,9 @@ from peeps_scheduler.validation.file_schemas.responses_csv import (
 )
 from peeps_scheduler.validation.parsers import EventSpec
 from tests.validation.conftest import assert_error_for_field, assert_error_for_model
+from tests.validation.fixtures import event_row_data, response_data
 
 pytestmark = pytest.mark.unit
-
-
-def response_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "Timestamp": "1/1/2020 12:00:00",
-        "Name": "Alice Alpha",
-        "Display Name": "Alice",
-        "Email Address": "alice@test.com",
-        "Primary Role": "Leader",
-        "Secondary Role": "I only want to be scheduled in my primary role",
-        "Max Sessions": "2",
-        "Availability": "Saturday January 4 - 1pm",
-        "Min Interval Days": "0",
-    }
-    return {**defaults, **(overrides or {})}
-
-
-def event_row_data(overrides: dict | None = None) -> dict:
-    defaults = {
-        "Name": "Saturday January 4 - 1pm",
-        "Event Duration": "90",
-    }
-    return {**defaults, **(overrides or {})}
 
 
 class TestResponseCsvRowSchema:
@@ -163,7 +141,9 @@ class TestResponsesCsvFileSchema:
                     "responses": [response_data()],
                     "event_rows": [
                         event_row_data({"Name": "Saturday January 4 - 1pm"}),
-                        event_row_data({"Name": "Saturday January 4 - 1pm", "Event Duration": "60"}),
+                        event_row_data(
+                            {"Name": "Saturday January 4 - 1pm", "Event Duration": "60"}
+                        ),
                     ],
                 },
                 context={"ctx": ctx},

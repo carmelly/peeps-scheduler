@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from peeps_scheduler.constants import DATE_FORMAT
+from peeps_scheduler.models import Role, SwitchPreference
 
 
 @dataclass(frozen=True)
@@ -85,3 +86,57 @@ def parse_event_datetime(v, tz: datetime.tzinfo):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=tz)
     return dt
+
+
+def parse_role(value: str) -> Role:
+    """
+    Parse role string to Role enum.
+
+    Accepts case-insensitive variations: 'lead', 'leader', 'follow', 'follower'.
+    Returns corresponding Role enum member.
+
+    Args:
+        value: Role string to parse
+
+    Returns:
+        Role enum member (Role.LEADER or Role.FOLLOWER)
+
+    Raises:
+        ValueError: If input is invalid or empty
+    """
+    stripped = value.strip().lower()
+
+    if stripped in ("leader", "lead"):
+        return Role.LEADER
+    elif stripped in ("follower", "follow"):
+        return Role.FOLLOWER
+    else:
+        raise ValueError(f"Invalid role: {value}")
+
+
+def parse_switch_preference(value: str) -> SwitchPreference:
+    """
+    Parse switch preference string to SwitchPreference enum.
+
+    Accepts exact match of one of three long-form preference strings.
+    Returns corresponding SwitchPreference enum member.
+
+    Args:
+        value: Switch preference string to parse
+
+    Returns:
+        SwitchPreference enum member (PRIMARY_ONLY, SWITCH_IF_PRIMARY_FULL, or SWITCH_IF_NEEDED)
+
+    Raises:
+        ValueError: If input doesn't match exactly
+    """
+    stripped = value.strip()
+
+    if stripped == "I only want to be scheduled in my primary role":
+        return SwitchPreference.PRIMARY_ONLY
+    elif stripped == "I'm happy to dance my secondary role if it lets me attend when my primary is full":
+        return SwitchPreference.SWITCH_IF_PRIMARY_FULL
+    elif stripped == "I'm willing to dance my secondary role only if it's needed to enable filling a session":
+        return SwitchPreference.SWITCH_IF_NEEDED
+    else:
+        raise ValueError(f"Invalid switch preference: {value}")
