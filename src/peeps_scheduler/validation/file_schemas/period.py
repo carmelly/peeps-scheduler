@@ -40,15 +40,7 @@ class PeriodFileSchema(BaseModel):
         ]
         validate_response_emails(member_emails, response_emails)
 
-        event_row_starts = set()
-        if self.responses.event_rows:
-            event_row_starts = {row.start_dt for row in self.responses.event_rows}
-
-        event_starts = set(event_row_starts)
-        if not event_starts:
-            for response in self.responses.responses:
-                for parsed in response.availability:
-                    event_starts.add(parsed.start)
+        event_starts = {event.start for event in self.responses.events}
 
         roster_entries: list[RosterEntryJsonSchema] = []
 
@@ -68,6 +60,11 @@ class PeriodFileSchema(BaseModel):
             member_emails,
             self.cancelled_events,
             self.cancelled_availability,
+        )
+        validate_event_references(
+            event_starts,
+            self.results,
+            self.attendance,
         )
 
         return self
@@ -160,3 +157,28 @@ def validate_cancellations(
                     missing_events.append(event.raw)
         if missing_events:
             raise ValueError(f"cancelled availability event not found: {missing_events}")
+
+
+def validate_event_references(
+    event_starts: set,
+    results: ResultsJsonSchema | None,
+    attendance: ActualAttendanceJsonSchema | None,
+) -> None:
+    """Ensure results and attendance event dates match extracted responses.events."""
+    if results:
+        missing_result_events = [
+            event.start_dt
+            for event in results.valid_events
+            if event.start_dt not in event_starts
+        ]
+        if missing_result_events:
+            raise ValueError(f"result event not found: {missing_result_events}")
+
+    if attendance:
+        missing_attendance_events = [
+            event.start_dt
+            for event in attendance.valid_events
+            if event.start_dt not in event_starts
+        ]
+        if missing_attendance_events:
+            raise ValueError(f"attendance event not found: {missing_attendance_events}")

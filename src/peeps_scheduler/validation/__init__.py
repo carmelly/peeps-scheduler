@@ -7,25 +7,17 @@ file IO happens elsewhere.
 
 Public API:
   - Schemas: Direct Pydantic validation (MembersCsvFileSchema, ResponsesCsvFileSchema, etc.)
-  - Validation wrappers: CSV/JSON → validated dicts (validate_members, validate_responses, etc.)
-  - Converters: Validated data → domain objects (member_to_peep, convert_to_events, etc.)
+  - Converters: Validated data → domain objects (member_to_peep, convert_to_peeps, etc.)
   - Period orchestration: Complete period loading (load_and_validate_period, PeriodData)
 """
 
 # Validation wrappers (CSV/JSON → validated dicts) and converters (schemas → domain objects)
 from peeps_scheduler.validation.converters import (
-    convert_to_events,
     convert_to_peeps,
     event_spec_to_event,
     extract_cancellations,
     extract_partnerships,
     member_to_peep,
-    validate_attendance,
-    validate_cancellations,
-    validate_members,
-    validate_partnerships,
-    validate_responses,
-    validate_results,
 )
 
 # Errors
@@ -63,7 +55,6 @@ from peeps_scheduler.validation.period import (
     load_and_validate_period,
     load_period_files,
     to_period_data,
-    validate_period_data,
 )
 
 __all__ = [
@@ -84,7 +75,6 @@ __all__ = [
     "ResultEventJsonSchema",
     "ResultsJsonSchema",
     "RosterEntryJsonSchema",
-    "convert_to_events",
     "convert_to_peeps",
     "event_spec_to_event",
     "extract_cancellations",
@@ -93,11 +83,4 @@ __all__ = [
     "load_period_files",
     "member_to_peep",
     "to_period_data",
-    "validate_attendance",
-    "validate_cancellations",
-    "validate_members",
-    "validate_partnerships",
-    "validate_period_data",
-    "validate_responses",
-    "validate_results",
 ]

@@ -180,3 +180,71 @@ class TestResponsesCsvFileSchema:
             )
 
         assert_error_for_model(e.value.errors(), "event rows")
+
+    def test_events_saved_from_availability(self, ctx):
+        """Test ResponsesCsvFileSchema.events saved from response availability."""
+        schema = ResponsesCsvFileSchema.model_validate(
+            {
+                "responses": [
+                    response_data(
+                        {"Availability": "Saturday January 4 - 1pm, Sunday January 5 - 2pm"}
+                    )
+                ],
+            },
+            context={"ctx": ctx},
+        )
+
+        assert hasattr(schema, "events")
+        assert len(schema.events) == 2
+        assert all(isinstance(e, EventSpec) for e in schema.events)
+        assert schema.events[0].start == datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
+        assert schema.events[0].duration_minutes is None
+        assert schema.events[1].start == datetime(2020, 1, 5, 14, 0, tzinfo=ctx.tz)
+
+    def test_events_deduplicated_by_datetime(self, ctx):
+        """Edge case: Events deduplicated when multiple responses share same availability."""
+        schema = ResponsesCsvFileSchema.model_validate(
+            {
+                "responses": [
+                    response_data({"Name": "Alice", "Availability": "Saturday January 4 - 1pm"}),
+                    response_data(
+                        {
+                            "Name": "Bob",
+                            "Email Address": "bob@test.com",
+                            "Availability": "Saturday January 4 - 1pm",
+                        }
+                    ),
+                ],
+            },
+            context={"ctx": ctx},
+        )
+
+        # Should have 1 event, not 2 (deduped)
+        assert len(schema.events) == 1
+        assert schema.events[0].start == datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
+
+    def test_event_rows_take_precedence_over_availability(self, ctx):
+        """Test event_rows used for events when they exist (availability not used)."""
+        schema = ResponsesCsvFileSchema.model_validate(
+            {
+                "responses": [
+                    response_data({"Availability": "Saturday January 4 - 1pm"})
+                ],
+                "event_rows": [
+                    event_row_data({"Name": "Saturday January 4 - 1pm", "Event Duration": "120"}),
+                    event_row_data(
+                        {"Name": "Friday January 10 - 6:30pm", "Event Duration": "90"}
+                    ),
+                ],
+            },
+            context={"ctx": ctx},
+        )
+
+        assert len(schema.events) == 2
+        assert all(isinstance(e, EventSpec) for e in schema.events)
+        # First event from event_rows
+        assert schema.events[0].start == datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
+        assert schema.events[0].duration_minutes == 120
+        # Second event from event_rows (not in availability)
+        assert schema.events[1].start == datetime(2020, 1, 10, 18, 30, tzinfo=ctx.tz)
+        assert schema.events[1].duration_minutes == 90

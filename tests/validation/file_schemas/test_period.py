@@ -125,7 +125,7 @@ class TestPeriodFileSchema:
         assert schema.cancelled_availability is None
         assert schema.partnerships is None
 
-    def test_response_emails_must_exist_in_members(self, ctx):
+    def test_response_email_not_found_raises(self, ctx):
         data = period_data(
             {
                 "responses": {
@@ -141,7 +141,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "response email")
 
-    def test_roster_ids_must_exist(self, ctx):
+    def test_results_roster_id_not_found_raises(self, ctx):
         data = period_data(
             {
                 "results": {
@@ -162,7 +162,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "roster id")
 
-    def test_roster_name_must_match_display_name(self, ctx):
+    def test_results_roster_display_name_mismatch_raises(self, ctx):
         data = period_data(
             {
                 "results": {
@@ -183,7 +183,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "display name")
 
-    def test_roster_name_falls_back_to_full_name(self, ctx):
+    def test_valid_results_roster_name_fallback_to_full_name(self, ctx):
         data = period_data(
             {
                 "members": [
@@ -215,7 +215,7 @@ class TestPeriodFileSchema:
 
         assert schema.results is not None
 
-    def test_roster_name_mismatch_without_display_name_raises(self, ctx):
+    def test_results_roster_full_name_mismatch_raises(self, ctx):
         data = period_data(
             {
                 "members": [
@@ -248,7 +248,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "display name")
 
-    def test_attendance_roster_ids_must_exist(self, ctx):
+    def test_attendance_roster_id_not_found_raises(self, ctx):
         data = period_data(
             {
                 "attendance": {
@@ -266,7 +266,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "roster id")
 
-    def test_partnership_target_ids_must_exist(self, ctx):
+    def test_partnership_target_id_not_found_raises(self, ctx):
         data = period_data(
             {
                 "partnerships": [{"1": [2, 99]}],
@@ -278,7 +278,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "partner id")
 
-    def test_partnership_requester_id_must_exist(self, ctx):
+    def test_partnership_requester_id_not_found_raises(self, ctx):
         data = period_data(
             {
                 "partnerships": [{"99": [1]}],
@@ -290,7 +290,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "requester id")
 
-    def test_cancelled_event_ids_must_exist(self, ctx):
+    def test_cancelled_event_not_found_raises(self, ctx):
         data = period_data(
             {
                 "responses": {
@@ -312,7 +312,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "cancelled event")
 
-    def test_cancelled_availability_email_must_exist(self, ctx):
+    def test_cancelled_availability_email_not_found_raises(self, ctx):
         data = period_data(
             {
                 "responses": {
@@ -337,7 +337,7 @@ class TestPeriodFileSchema:
 
         assert_error_for_model(e.value.errors(), "cancelled availability email")
 
-    def test_cancelled_availability_events_must_exist(self, ctx):
+    def test_cancelled_availability_event_not_found_raises(self, ctx):
         data = period_data(
             {
                 "responses": {
@@ -361,6 +361,74 @@ class TestPeriodFileSchema:
             PeriodFileSchema.model_validate(data, context={"ctx": ctx})
 
         assert_error_for_model(e.value.errors(), "cancelled availability event")
+
+    def test_results_event_not_found_raises(self, ctx):
+        """Test that results event not in extracted responses events raises error."""
+        data = period_data(
+            {
+                "responses": {
+                    "responses": [response_data()],
+                    "event_rows": [
+                        event_row_data(
+                            {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                        )
+                    ],
+                },
+                "results": {
+                    "valid_events": [
+                        {
+                            "id": 2,
+                            "date": "2020-01-05 14:00",  # Sunday 2pm - Not in event_rows (only Saturday 1pm)
+                            "duration_minutes": 120,
+                            "attendees": [{"id": 1, "name": "Alice", "role": "leader"}],
+                            "alternates": [],
+                        }
+                    ],
+                    "num_unique_attendees": 1,
+                    "system_weight": 10,
+                }
+            }
+        )
+
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+
+        assert len(e.value.errors()) > 0
+        errors_str = str(e.value.errors())
+        assert "result event" in errors_str.lower() or "event" in errors_str.lower()
+
+    def test_attendance_event_not_found_raises(self, ctx):
+        """Test that attendance event not in extracted responses events raises error."""
+        data = period_data(
+            {
+                "responses": {
+                    "responses": [response_data()],
+                    "event_rows": [
+                        event_row_data(
+                            {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                        )
+                    ],
+                },
+                "attendance": {
+                    "valid_events": [
+                        {
+                            "id": 1,
+                            "date": "2020-01-05 14:00",  # Sunday 2pm - Not in event_rows (only Saturday 1pm)
+                            "duration_minutes": 120,
+                            "attendees": [{"id": 1, "name": "Alice", "role": "leader"}],
+                        }
+                    ]
+                },
+            }
+        )
+
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+
+        # Should fail validation with at least one error
+        assert len(e.value.errors()) > 0
+        errors_str = str(e.value.errors())
+        assert "attendance event" in errors_str.lower() or "event" in errors_str.lower()
 
 
 class TestPeriodValidators:

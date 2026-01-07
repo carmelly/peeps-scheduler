@@ -5,60 +5,194 @@ import tempfile
 from pathlib import Path
 import pytest
 from peeps_scheduler.models import Event, Peep, Role
-from peeps_scheduler.validation.errors import FileValidationError
+from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
 from peeps_scheduler.validation.period import (
     PeriodData,
     load_and_validate_period,
+    to_period_data,
 )
+from tests.validation.file_schemas.test_period import period_data
+from tests.validation.fixtures import event_row_data, response_data
 
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture(scope="function")
+def temp_period_dir(ctx):
+    """Create temporary period directory with valid test files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+
+        # Write members.csv
+        members_csv = tmpdir_path / "members.csv"
+        members_csv.write_text(
+            "id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined\n"
+            "1,Alice Alpha,Alice,alice@test.com,Leader,0,5,10,TRUE,1/1/2020\n"
+        )
+
+        # Write responses.csv
+        responses_csv = tmpdir_path / "responses.csv"
+        responses_csv.write_text(
+            "Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days\n"
+            "1/1/2020 12:00:00,Alice Alpha,Alice,alice@test.com,Follower,I only want to be scheduled in my primary role,2,Saturday January 4 - 1pm,0\n"
+        )
+
+        # Write cancellations.json
+        cancellations_json = tmpdir_path / "cancellations.json"
+        cancellations_json.write_text(
+            json.dumps(
+                {
+                    "cancelled_events": [],
+                    "cancelled_availability": [],
+                }
+            )
+        )
+
+        # Write partnerships.json
+        partnerships_json = tmpdir_path / "partnerships.json"
+        partnerships_json.write_text(
+            json.dumps(
+                {
+                    "1": [],
+                }
+            )
+        )
+
+        yield tmpdir_path
+
+
+@pytest.mark.integration
+class TestPeriodSchemaIntegration:
+    """Integration tests for complete PeriodFileSchema workflow."""
+
+    def test_load_and_validate_period_uses_period_file_schema(self, ctx, temp_period_dir):
+        """Integration: load_and_validate_period() uses PeriodFileSchema.model_validate()."""
+        period_data_obj = load_and_validate_period(str(temp_period_dir), 2020)
+
+        assert isinstance(period_data_obj, PeriodData)
+        assert len(period_data_obj.peeps) >= 1
+        assert len(period_data_obj.events) >= 1
+
+    def test_period_file_schema_validates_all_cross_file_constraints(self, ctx, temp_period_dir):
+        """Integration: PeriodFileSchema enforces all cross-file validation rules."""
+        # This test verifies the complete validation works end-to-end
+        period_data_obj = load_and_validate_period(str(temp_period_dir), 2020)
+
+        # Should successfully validate all components
+        assert isinstance(period_data_obj.peeps, list)
+        assert isinstance(period_data_obj.events, list)
+        assert isinstance(period_data_obj.cancelled_event_ids, set)
+        assert isinstance(period_data_obj.partnerships, dict)
+
+    def test_to_period_data_converts_event_specs_to_events(self, ctx):
+        """Contract: to_period_data() converts EventSpec to Event domain objects."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [
+                            event_row_data(
+                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                            )
+                        ],
+                    }
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = to_period_data(schema, 2020)
+
+        # Events should be Event domain objects, not EventSpecs
+        assert len(result.events) >= 1
+        assert all(isinstance(e, Event) for e in result.events)
+        assert result.events[0].date is not None
+        assert result.events[0].duration_minutes is not None
+
+
+@pytest.mark.unit
+class TestToPeriodData:
+    """Tests for to_period_data() function with PeriodFileSchema."""
+
+    def test_accepts_period_file_schema(self, ctx):
+        """Contract: to_period_data() accepts PeriodFileSchema object."""
+        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+
+        result = to_period_data(schema, 2020)
+
+        assert isinstance(result, PeriodData)
+        assert isinstance(result.peeps, list)
+        assert isinstance(result.events, list)
+        assert isinstance(result.cancelled_event_ids, set)
+        assert isinstance(result.cancelled_availability, dict)
+        assert isinstance(result.partnerships, dict)
+
+    def test_populates_peeps_from_schema(self, ctx):
+        """Contract: Peeps populated correctly from schema members and responses."""
+        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+
+        result = to_period_data(schema, 2020)
+
+        assert len(result.peeps) >= 2
+        assert all(isinstance(p, Peep) for p in result.peeps)
+        assert any(p.id == 1 for p in result.peeps)
+        assert any(p.id == 2 for p in result.peeps)
+
+    def test_populates_events_from_schema_responses_events(self, ctx):
+        """Contract: Events created from schema.responses.events (EventSpecs)."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [
+                            event_row_data(
+                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                            )
+                        ],
+                    }
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = to_period_data(schema, 2020)
+
+        assert len(result.events) >= 1
+        assert all(isinstance(e, Event) for e in result.events)
+        # Events should be created from responses.events
+        event = result.events[0]
+        assert event.date is not None
+        assert event.duration_minutes == 90  # From event_row
+
+    def test_extracts_cancellations_from_schema(self, ctx):
+        """Contract: Cancellations extracted correctly from schema."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [
+                            event_row_data(
+                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                            )
+                        ],
+                    },
+                    "cancelled_events": {"cancelled_events": ["Saturday January 4 - 1pm"]},
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = to_period_data(schema, 2020)
+
+        assert isinstance(result.cancelled_event_ids, set)
+        assert len(result.cancelled_event_ids) >= 1
+
+
 class TestLoadAndValidatePeriod:
     """Tests for load_and_validate_period orchestrator function."""
-
-    @pytest.fixture
-    def temp_period_dir(self, ctx):
-        """Create temporary period directory with valid test files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-
-            # Write members.csv
-            members_csv = tmpdir_path / "members.csv"
-            members_csv.write_text(
-                "id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined\n"
-                "1,Alice Alpha,Alice,alice@test.com,Leader,0,5,10,TRUE,1/1/2020\n"
-            )
-
-            # Write responses.csv
-            responses_csv = tmpdir_path / "responses.csv"
-            responses_csv.write_text(
-                "Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days\n"
-                "1/1/2020 12:00:00,Alice Alpha,Alice,alice@test.com,Follower,I only want to be scheduled in my primary role,2,Saturday January 4 - 1pm,0\n"
-            )
-
-            # Write cancellations.json
-            cancellations_json = tmpdir_path / "cancellations.json"
-            cancellations_json.write_text(
-                json.dumps(
-                    {
-                        "cancelled_events": [],
-                        "cancelled_availability": [],
-                    }
-                )
-            )
-
-            # Write partnerships.json
-            partnerships_json = tmpdir_path / "partnerships.json"
-            partnerships_json.write_text(
-                json.dumps(
-                    {
-                        "1": [],
-                    }
-                )
-            )
-
-            yield tmpdir_path
 
     def test_load_and_validate_period_valid_data(self, ctx, temp_period_dir):
         """Happy path: Valid period directory returns PeriodData with correct structure."""
@@ -130,99 +264,6 @@ class TestLoadAndValidatePeriod:
         # Should return PeriodData with empty partnerships
         assert isinstance(period_data, PeriodData)
         assert period_data.partnerships == {}
-
-    def test_validate_period_data_with_single_file_error(self, ctx):
-        """Edge case: Single file error raises FileValidationError directly (not MultiFileValidationError)."""
-        from peeps_scheduler.validation.errors import FileValidationError, MultiFileValidationError
-        from peeps_scheduler.validation.period import validate_period_data
-        from tests.validation.fixtures import member_data, response_data
-
-        # Create raw_data with error in ONLY members file
-        raw_data = {
-            "members": [member_data({"Email Address": ""})],  # Active without email
-            "responses": [response_data({"Email Address": "alice@test.com"})],  # Valid
-            "cancellations": None,
-            "partnerships": None,
-        }
-
-        # Should raise FileValidationError directly (not MultiFileValidationError)
-        with pytest.raises(FileValidationError) as exc_info:
-            validate_period_data(raw_data, 2020)
-
-        # Should be FileValidationError (not MultiFileValidationError)
-        assert isinstance(exc_info.value, FileValidationError)
-        assert not isinstance(exc_info.value, MultiFileValidationError)
-        # Should have exactly 1 error
-        assert len(exc_info.value.errors()) == 1
-        assert "members.csv" in str(exc_info.value)
-
-    def test_validate_period_data_with_two_file_errors(self, ctx):
-        """Edge case: Two file errors raises MultiFileValidationError with both files mentioned."""
-        from peeps_scheduler.validation.errors import FileValidationError, MultiFileValidationError
-        from peeps_scheduler.validation.period import validate_period_data
-        from tests.validation.fixtures import member_data, response_data
-
-        # Create raw_data with errors in members AND responses
-        raw_data = {
-            "members": [member_data({"Email Address": ""})],  # Active without email
-            "responses": [
-                response_data({"Email Address": "alice@test.com"}),
-                response_data(
-                    {"Name": "Bob", "Email Address": "alice@test.com"}
-                ),  # Duplicate email
-            ],
-            "cancellations": None,
-            "partnerships": None,
-        }
-
-        # Should raise MultiFileValidationError
-        with pytest.raises(MultiFileValidationError) as exc_info:
-            validate_period_data(raw_data, 2020)
-
-        error_msg = str(exc_info.value)
-        # Both files with errors should be mentioned
-        assert "members.csv" in error_msg
-        assert "responses.csv" in error_msg
-        # Optional files without errors should NOT be mentioned
-        assert "cancellations.json" not in error_msg
-        assert "partnerships.json" not in error_msg
-        # Should have exactly 2 file errors
-        assert len(exc_info.value.file_errors) == 2
-
-    def test_validate_period_data_collects_all_file_validation_errors(self, ctx):
-        """Integration: validate_period_data collects errors from ALL files before raising.
-
-        Validates all files and collects ALL errors, then raises with all filenames
-        in the error message. This allows users to fix all errors at once instead of
-        one-at-a-time fail-fast.
-        """
-        from peeps_scheduler.validation.errors import FileValidationError, MultiFileValidationError
-        from peeps_scheduler.validation.period import validate_period_data
-        from tests.validation.fixtures import member_data, response_data
-
-        # Create raw_data with errors in ALL files
-        raw_data = {
-            "members": [member_data({"Email Address": ""})],  # Active without email
-            "responses": [
-                response_data({"Email Address": "alice@test.com"}),
-                response_data({"Name": "Bob", "Email Address": "alice@test.com"}),  # Duplicate
-            ],
-            "cancellations": {"cancelled_events": "not a list"},  # Wrong type
-            "partnerships": {"invalid": "format"},  # Wrong format
-        }
-
-        # Should raise MultiFileValidationError with ALL filenames mentioned
-        with pytest.raises(MultiFileValidationError) as exc_info:
-            validate_period_data(raw_data, 2020)
-
-        error_msg = str(exc_info.value)
-        # All 4 files should be mentioned in the combined error
-        assert "members.csv" in error_msg
-        assert "responses.csv" in error_msg
-        assert "cancellations.json" in error_msg
-        assert "partnerships.json" in error_msg
-        # Should have exactly 4 file errors
-        assert len(exc_info.value.file_errors) == 4
 
     def test_load_and_validate_period_deduplicates_events(self, ctx, temp_period_dir):
         """Field mapping: Events deduplicated when multiple people share availability."""

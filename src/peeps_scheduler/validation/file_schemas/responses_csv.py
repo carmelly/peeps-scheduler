@@ -18,7 +18,7 @@ from peeps_scheduler.validation.fields import (
     RoleEnum,
 )
 from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
-from peeps_scheduler.validation.parsers import parse_event_name, parse_switch_preference
+from peeps_scheduler.validation.parsers import EventSpec, parse_event_name, parse_switch_preference
 
 
 class ResponseCsvRowSchema(BaseModel):
@@ -91,6 +91,7 @@ class EventRowCsvSchema(BaseModel):
 class ResponsesCsvFileSchema(BaseModel):
     responses: list[ResponseCsvRowSchema]
     event_rows: list[EventRowCsvSchema] | None = None
+    events: list[EventSpec] = Field(default_factory=list)
 
     @field_validator("responses", mode="after")
     @classmethod
@@ -132,5 +133,31 @@ class ResponsesCsvFileSchema(BaseModel):
 
             if unknown_availability:
                 raise ValueError("availability includes event not in event rows")
+
+        return self
+
+    @model_validator(mode="after")
+    def extract_and_deduplicate_events(self):
+        """Extract events from event_rows or response availability, deduplicate by start datetime."""
+        # If event_rows exist, use those for events
+        if self.event_rows:
+            self.events = [
+                EventSpec(
+                    start=row.start_dt,
+                    duration_minutes=row.duration_minutes,
+                    raw=row.name,
+                )
+                for row in self.event_rows
+            ]
+        else:
+            # Otherwise, collect from response availability and deduplicate by start datetime
+            unique_events_map = {}  # Key: start datetime, Value: EventSpec
+            for response in self.responses:
+                for event_spec in response.availability:
+                    event_start = event_spec.start
+                    if event_start not in unique_events_map:
+                        unique_events_map[event_start] = event_spec
+
+            self.events = list(unique_events_map.values())
 
         return self

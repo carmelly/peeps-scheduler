@@ -8,19 +8,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from peeps_scheduler import file_io
-from peeps_scheduler.constants import TIMEZONE
+from peeps_scheduler.constants import DEFAULT_EVENT_DURATION, TIMEZONE
 from peeps_scheduler.models import Event, Peep
 from peeps_scheduler.validation.converters import (
-    convert_to_events,
     convert_to_peeps,
-    extract_cancellations,
-    extract_partnerships,
-    validate_cancellations,
-    validate_members,
-    validate_partnerships,
 )
-from peeps_scheduler.validation.errors import FileValidationError, MultiFileValidationError
 from peeps_scheduler.validation.fields import ValidationContext
+from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
 
 
 @dataclass(frozen=True)
@@ -52,16 +46,16 @@ def load_and_validate_period(period_path: str, year: int) -> PeriodData:
         FileValidationError: If validation fails
     """
     raw = load_period_files(period_path)
-    validated = validate_period_data(raw, year)
-    return to_period_data(validated, year)
+    ctx = ValidationContext(year=year, tz=TIMEZONE)
+    period_schema = PeriodFileSchema.model_validate(raw, context={"ctx": ctx})
+    return to_period_data(period_schema, year)
 
 
 def load_period_files(period_path: str) -> dict:
     """
     Load raw CSV/JSON files from period directory.
 
-    Returns dict with keys: 'members', 'responses', 'cancellations', 'partnerships'
-    Missing optional files (cancellations, partnerships) have None values.
+    Returns dict formatted for PeriodFileSchema validation.
 
     Raises:
         FileNotFoundError: If required files (members.csv, responses.csv) missing
@@ -93,116 +87,81 @@ def load_period_files(period_path: str) -> dict:
     partnerships_data = None
     if partnerships_file.is_file():
         with partnerships_file.open() as f:
-            partnerships_data = json.load(f)
+            partnerships_dict = json.load(f)
+            # Convert flat dict to list of single-entry dicts for schema validation
+            # {"1": [2, 3]} -> [{"1": [2, 3]}]
+            partnerships_data = [{requester_id: partner_ids} for requester_id, partner_ids in partnerships_dict.items()]
 
     return {
         "members": member_rows,
-        "responses": response_rows,
-        "cancellations": cancellations_data,
+        "responses": {
+            "responses": response_rows,
+            "event_rows": None,
+        },
+        "cancelled_events": cancellations_data,
         "partnerships": partnerships_data,
     }
 
 
-def validate_period_data(raw_data: dict, year: int) -> dict:
+def to_period_data(period_schema: PeriodFileSchema, year: int) -> PeriodData:
     """
-    Validate all period data using validation wrappers.
+    Convert PeriodFileSchema to PeriodData domain object.
 
     Args:
-        raw_data: Dict from load_period_files() with keys: members, responses, cancellations, partnerships
-        year: Year for validation context
-
-    Returns:
-        Dict with validated data (same keys, validated structures)
-
-    Raises:
-        FileValidationError: If validation fails in single file
-        MultiFileValidationError: If validation fails in multiple files
-    """
-    # Create validation context
-    ctx = ValidationContext(year=year, tz=TIMEZONE)
-
-    # Collect errors from all files
-    file_errors = []
-
-    # Validate members
-    validated_members = None
-    try:
-        validated_members = validate_members(raw_data["members"], "members.csv", context={"ctx": ctx})
-    except FileValidationError as e:
-        file_errors.append(e)
-
-    # Validate responses
-    validated_responses = None
-    responses_data = {
-        "responses": raw_data["responses"],
-        "event_rows": None,
-    }
-    try:
-        from peeps_scheduler.validation.converters import validate_responses
-        validated_responses = validate_responses(responses_data, ctx, "responses.csv")
-    except FileValidationError as e:
-        file_errors.append(e)
-
-    # Validate optional files
-    validated_cancellations = None
-    if raw_data["cancellations"] is not None:
-        try:
-            validated_cancellations = validate_cancellations(
-                raw_data["cancellations"], ctx, "cancellations.json"
-            )
-        except FileValidationError as e:
-            file_errors.append(e)
-
-    validated_partnerships = None
-    if raw_data["partnerships"] is not None:
-        try:
-            validated_partnerships = validate_partnerships(
-                raw_data["partnerships"], "partnerships.json"
-            )
-        except FileValidationError as e:
-            file_errors.append(e)
-
-    # Raise appropriate error based on collected errors
-    if len(file_errors) == 1:
-        raise file_errors[0]
-    elif len(file_errors) > 1:
-        raise MultiFileValidationError(file_errors)
-
-    return {
-        "validated_members": validated_members,
-        "validated_responses": validated_responses,
-        "validated_cancellations": validated_cancellations,
-        "validated_partnerships": validated_partnerships,
-    }
-
-
-def to_period_data(validated: dict, year: int) -> PeriodData:
-    """
-    Convert validated data to PeriodData domain object.
-
-    Args:
-        validated: Dict from validate_period_data()
+        period_schema: Validated PeriodFileSchema object
         year: Year for context
 
     Returns:
         PeriodData with all components assembled
     """
-    validated_members = validated["validated_members"]
-    validated_responses = validated["validated_responses"]
-    validated_cancellations = validated["validated_cancellations"]
-    validated_partnerships = validated["validated_partnerships"]
+    # Extract members from schema
+    members = period_schema.members.root
 
     # Convert to peeps
-    peeps = convert_to_peeps(validated_members, validated_responses)
+    peeps = convert_to_peeps(members, period_schema.responses)
 
-    # Convert to events
-    events = convert_to_events(validated_responses)
+    # Convert events from schema.responses.events (EventSpecs)
+    events = [
+        Event(date=spec.start, duration_minutes=spec.duration_minutes or DEFAULT_EVENT_DURATION)
+        for spec in period_schema.responses.events
+    ]
 
     # Extract cancellations
-    cancelled_event_ids, cancelled_availability = extract_cancellations(validated_cancellations)
+    if period_schema.cancelled_events:
+        # Convert CancelledEventJsonSchema to CancellationsJsonSchema format
+        cancelled_event_ids = set()
+        for event in period_schema.cancelled_events.cancelled_events:
+            start = event.start
+            if start:
+                event_id = start.strftime("%Y-%m-%d %H:%M")
+                cancelled_event_ids.add(event_id)
+    else:
+        cancelled_event_ids = set()
+
+    # Handle cancelled availability
+    cancelled_availability = {}
+    if period_schema.cancelled_availability:
+        for avail in period_schema.cancelled_availability:
+            email = avail.email
+            if not email:
+                continue
+            events_set = set()
+            for event in avail.events:
+                start = event.start
+                if start:
+                    event_id = start.strftime("%Y-%m-%d %H:%M")
+                    events_set.add(event_id)
+            if events_set:
+                cancelled_availability[email] = events_set
 
     # Extract partnerships
-    partnerships = extract_partnerships(validated_partnerships)
+    partnerships = {}
+    if period_schema.partnerships:
+        for partnership in period_schema.partnerships:
+            requester_id = partnership.requester_id
+            target_ids = partnership.target_ids
+            if requester_id:
+                partnerships[requester_id] = set(target_ids) if target_ids else set()
 
     return PeriodData(
         peeps=peeps,

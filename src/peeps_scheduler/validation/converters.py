@@ -1,25 +1,17 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from pydantic import ValidationError
 from peeps_scheduler.constants import DEFAULT_EVENT_DURATION
 from peeps_scheduler.models import Event, Peep
-from peeps_scheduler.validation.errors import FileValidationError
-from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
 from peeps_scheduler.validation.file_schemas.cancellations_json import (
     CancellationsJsonSchema,
 )
-from peeps_scheduler.validation.file_schemas.members_csv import (
-    MemberCsvRowSchema,
-    MembersCsvFileSchema,
-)
+from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
 from peeps_scheduler.validation.file_schemas.partnerships_json import (
     PartnershipsJsonSchema,
 )
 from peeps_scheduler.validation.file_schemas.responses_csv import (
     ResponsesCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.helpers import normalize_email_for_match
 from peeps_scheduler.validation.parsers import EventSpec
 
@@ -31,8 +23,8 @@ def member_to_peep(
     Convert validated member and response data to Peep domain object.
 
     Args:
-        member_data: MemberCsvRowSchema from validate_members()
-        response_data: ResponsesCsvFileSchema from validate_responses(), or None
+        member_data: Validated MemberCsvRowSchema
+        response_data: Validated ResponsesCsvFileSchema, or None
 
     Returns:
         Peep domain object with all fields mapped correctly
@@ -89,10 +81,9 @@ def convert_to_peeps(
     Matches members with responses by email, uses member_to_peep() factory.
 
     Args:
-        member_dicts: List of validated MemberCsvRowSchema from validate_members()
+        member_dicts: List of validated MemberCsvRowSchema objects
 
-        response_dicts: Validated ResponsesCsvFileSchema from validate_responses()
-                        or empty dict {} for cases with no responses
+        response_dicts: Validated ResponsesCsvFileSchema or empty dict {} for cases with no responses
 
     Returns:
         List of Peep domain objects with response data integrated
@@ -127,54 +118,6 @@ def convert_to_peeps(
         peeps.append(peep)
 
     return peeps
-
-
-def convert_to_events(response_dicts: ResponsesCsvFileSchema | dict) -> list[Event]:
-    """
-    Convert validated responses data to Event domain objects.
-
-    Deduplicates events by start datetime (multiple people may have same availability).
-
-    Args:
-        response_dicts: Validated ResponsesCsvFileSchema from validate_responses()
-                        or empty dict {} for cases with no responses
-
-    Returns:
-        List of Event domain objects, deduplicated by start datetime
-    """
-
-    # Handle empty dict case
-    if isinstance(response_dicts, dict):
-        return []
-
-    # if responses data includes event rows, only use those to
-    # get events for period
-    if response_dicts.event_rows:
-        return [
-            Event(date=event.start_dt, duration_minutes=event.duration_minutes)
-            for event in response_dicts.event_rows
-        ]
-
-    # if no event rows, gather all events from response
-    # availability data
-    unique_events_map = {}  # Key: start datetime, Value: Event
-
-    responses_list = response_dicts.responses
-    for response in responses_list:
-        # Extract availability list from response
-        availability_list = response.availability
-
-        for event_spec in availability_list:
-            # Event start datetime is a unique identifier
-            event_start = event_spec.start
-            if event_start not in unique_events_map:
-                event = Event(
-                    date=event_start,
-                    duration_minutes=event_spec.duration_minutes or DEFAULT_EVENT_DURATION,
-                )
-                unique_events_map[event_start] = event
-
-    return list(unique_events_map.values())
 
 
 def extract_cancellations(
@@ -248,145 +191,3 @@ def extract_partnerships(
     return partnerships
 
 
-def validate_members(
-    raw_rows: list[dict], file_path: str, context: dict | None = None
-) -> list[MemberCsvRowSchema]:
-    """
-    Validate members CSV data and return validated schema objects.
-
-    Args:
-        raw_rows: Raw member CSV rows as dicts
-        file_path: Path to file being validated (for error context)
-        context: Optional validation context dict
-
-    Returns:
-        List of validated MemberCsvRowSchema objects
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        return MembersCsvFileSchema.model_validate(raw_rows).root
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e
-
-
-def validate_responses(
-    raw_data: dict, ctx: ValidationContext, file_path: str
-) -> ResponsesCsvFileSchema:
-    """
-    Validate responses CSV data and return validated schema object.
-
-    Args:
-        raw_data: Raw responses data with 'responses' and 'event_rows' keys
-        ctx: Validation context (year, timezone)
-        file_path: Path to file being validated (for error context)
-
-    Returns:
-        Validated ResponsesCsvFileSchema object
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        schema = ResponsesCsvFileSchema.model_validate(raw_data, context={"ctx": ctx})
-        return schema
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e
-
-
-def validate_cancellations(
-    raw_data: dict, ctx: ValidationContext, file_path: str
-) -> CancellationsJsonSchema:
-    """
-    Validate cancellations JSON data and return validated schema object.
-
-    Args:
-        raw_data: Raw cancellations data
-        ctx: Validation context (year, timezone)
-        file_path: Path to file being validated (for error context)
-
-    Returns:
-        Validated CancellationsJsonSchema object
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        schema = CancellationsJsonSchema.model_validate(raw_data, context={"ctx": ctx})
-        return schema
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e
-
-
-def validate_partnerships(raw_data: dict, file_path: str) -> PartnershipsJsonSchema:
-    """
-    Validate partnerships JSON data and return validated schema object.
-
-    Accepts partnerships.json format: a flat dict where each key is a requester_id
-    (string) and each value is a list of target member IDs.
-    Example: {"19": [20], "20": [19], "46": [43, 31]}
-
-    Args:
-        raw_data: Raw partnerships data (flat dict)
-        file_path: Path to file being validated (for error context)
-
-    Returns:
-        Validated PartnershipsJsonSchema object
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        schema = PartnershipsJsonSchema.model_validate(raw_data)
-        return schema
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e
-
-
-def validate_attendance(
-    raw_data: dict, ctx: ValidationContext, file_path: str
-) -> ActualAttendanceJsonSchema:
-    """
-    Validate attendance JSON data and return validated schema object.
-
-    Args:
-        raw_data: Raw attendance data
-        ctx: Validation context (year, timezone)
-        file_path: Path to file being validated (for error context)
-
-    Returns:
-        Validated ActualAttendanceJsonSchema object
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        # Transform "events" to "valid_events" for schema compatibility
-        # transformed_data = {**raw_data, "valid_events": raw_data.get("events", [])}
-        schema = ActualAttendanceJsonSchema.model_validate(raw_data, context={"ctx": ctx})
-        return schema
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e
-
-
-def validate_results(raw_data: dict, ctx: ValidationContext, file_path: str) -> ResultsJsonSchema:
-    """
-    Validate results JSON data and return validated ResultsJsonSchema object.
-
-    Args:
-        raw_data: Raw results data
-        ctx: Validation context (year, timezone)
-        file_path: Path to file being validated (for error context)
-
-    Returns:
-        Validated ResultsJsonSchema object
-
-    Raises:
-        FileValidationError: If validation fails
-    """
-    try:
-        schema = ResultsJsonSchema.model_validate(raw_data, context={"ctx": ctx})
-        return schema
-    except ValidationError as e:
-        raise FileValidationError(file_path, e) from e

@@ -8,7 +8,7 @@ from peeps_scheduler.validation.file_schemas.attendance_json import (
     RosterEntryJsonSchema,
 )
 from tests.validation.conftest import assert_error_for_model
-from tests.validation.fixtures import attendance_event_data, attendance_data
+from tests.validation.fixtures import attendance_data, attendance_event_data
 
 
 @pytest.mark.unit
