@@ -121,6 +121,21 @@ def main():
         help="Period slug (e.g., 2026-02)",
     )
 
+    # Pretty results command
+    pretty_results_parser = subparsers.add_parser(
+        "pretty-results", help="Pretty-print results.json for quick review"
+    )
+    pretty_results_parser.add_argument(
+        "--period-folder",
+        required=True,
+        help="Period slug (e.g., 2026-02)",
+    )
+    pretty_results_parser.add_argument(
+        "--results-file",
+        default="results.json",
+        help="Results filename (default: results.json)",
+    )
+
     args = parser.parse_args()
     utils.setup_logging(verbose=args.verbose)
 
@@ -143,6 +158,8 @@ def main():
         from peeps_scheduler.assign_topics import assign_topics
 
         assign_topics(args.period_folder)
+    elif args.command == "pretty-results":
+        utils.print_results_summary(args.period_folder, results_filename=args.results_file)
     else:
         parser.print_help()
 

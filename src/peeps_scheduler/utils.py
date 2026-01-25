@@ -2,7 +2,8 @@ import datetime
 import itertools
 import json
 import logging
-from peeps_scheduler.constants import DATE_FORMAT
+from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
+from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.file_io import load_csv, normalize_email
 from peeps_scheduler.models import Event, EventSequence, Peep, Role
 
@@ -109,3 +110,66 @@ def apply_event_results(result_json, members_csv, responses_csv):
     sequence.finalize()
 
     return sequence.peeps
+
+
+def format_event_date_str(date_str):
+    dt = datetime.datetime.strptime(date_str, DATE_FORMAT)
+    formatted = dt.strftime(DATESTR_FORMAT)
+    formatted = formatted.replace(" 0", " ")
+    formatted = formatted[:-2] + formatted[-2:].lower()
+    return formatted
+
+
+def print_results_summary(period_slug, results_filename="results.json"):
+    dm = get_data_manager()
+    period_path = dm.get_period_path(period_slug)
+    results_path = period_path / results_filename
+
+    if not results_path.exists():
+        raise FileNotFoundError(f"results.json not found: {results_path}")
+
+    with results_path.open(encoding="utf-8") as f:
+        results = json.load(f)
+
+    events = results.get("valid_events", [])
+
+    def _sort_key(event):
+        date_str = event.get("date", "")
+        try:
+            return (0, datetime.datetime.strptime(date_str, DATE_FORMAT))
+        except (TypeError, ValueError):
+            return (1, date_str or "")
+
+    for event in sorted(events, key=_sort_key):
+        date_str = event.get("date", "")
+        duration = event.get("duration_minutes")
+        topic = event.get("topic")
+        leaders = event.get("leaders_string", "")
+        followers = event.get("followers_string", "")
+        topic_scores = event.get("topic_scores", [])
+
+        try:
+            date_label = format_event_date_str(date_str)
+        except (TypeError, ValueError):
+            date_label = date_str or "Unknown date"
+
+        header = date_label
+        if duration:
+            header += f", {duration} mins"
+        if topic:
+            header += f" -> {topic}"
+        print(header)
+
+        if leaders:
+            print(f"  {leaders}")
+        if followers:
+            print(f"  {followers}")
+
+        if topic_scores:
+            print("  Topic scores:")
+            for item in topic_scores:
+                topic_name = item.get("topic", "")
+                score = item.get("score", 0)
+                print(f"    - {topic_name}: {score}")
+
+        print()
