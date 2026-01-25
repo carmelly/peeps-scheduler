@@ -111,6 +111,16 @@ def main():
         help="Filename of cancellations JSON (default: cancellations.json)",
     )
 
+    # Assign topics command
+    assign_topics_parser = subparsers.add_parser(
+        "assign-topics", help="Assign deep-dive topics to scheduled events"
+    )
+    assign_topics_parser.add_argument(
+        "--period-folder",
+        required=True,
+        help="Period slug (e.g., 2026-02)",
+    )
+
     args = parser.parse_args()
     utils.setup_logging(verbose=args.verbose)
 
@@ -129,6 +139,10 @@ def main():
         from peeps_scheduler.availability_report import run_availability_report
 
         run_availability_report(args.data_folder, cancellations_file=args.cancellations_file)
+    elif args.command == "assign-topics":
+        from peeps_scheduler.assign_topics import assign_topics
+
+        assign_topics(args.period_folder)
     else:
         parser.print_help()
 
