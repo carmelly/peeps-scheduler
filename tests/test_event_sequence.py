@@ -518,6 +518,38 @@ class TestEventSequenceDataConversion:
         assert data["mutual_repeat_fulfilled"] == 0
         assert data["one_sided_fulfilled"] == 0
 
+    def test_to_dict_uses_scheduled_role_not_primary_role(self, event_factory, peep_factory):
+        """Test that to_dict uses the role a peep is dancing, not their primary role."""
+        event = event_factory(id=1)
+
+        # Create follower scheduled as leader (non-primary role)
+        follower = peep_factory(id=1, display_name="Follower", role=Role.FOLLOWER)
+        event.add_attendee(follower, Role.LEADER)
+
+        # Create leader scheduled as follower (non-primary role)
+        leader = peep_factory(id=2, display_name="Leader", role=Role.LEADER)
+        event.add_attendee(leader, Role.FOLLOWER)
+
+        # Add a leader in primary role (control case)
+        leader2 = peep_factory(id=3, display_name="Leader2", role=Role.LEADER)
+        event.add_attendee(leader2, Role.LEADER)
+
+        sequence = EventSequence([event], [follower, leader, leader2])
+        sequence.valid_events = [event]
+
+        data = sequence.to_dict()
+        attendees = data["valid_events"][0]["attendees"]
+
+        # Find attendees by id
+        follower_data = next(a for a in attendees if a["id"] == 1)
+        leader_data = next(a for a in attendees if a["id"] == 2)
+        leader2_data = next(a for a in attendees if a["id"] == 3)
+
+        # Verify roles are correct (scheduled role, not primary role)
+        assert follower_data["role"] == "leader"  # Scheduled as leader
+        assert leader_data["role"] == "follower"  # Scheduled as follower
+        assert leader2_data["role"] == "leader"  # Scheduled as leader (primary)
+
 
 class TestEventSequencePartnerships:
     """Test partnership fulfillment scoring for EventSequence."""

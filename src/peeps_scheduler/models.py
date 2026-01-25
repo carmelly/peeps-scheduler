@@ -690,12 +690,21 @@ class EventSequence:
                     "date": event.date.strftime(DATE_FORMAT),
                     "duration_minutes": event.duration_minutes,
                     "attendees": [
-                        {"id": peep.id, "name": peep.name, "role": peep.role.value}
+                        {
+                            "id": peep.id,
+                            "name": peep.name,
+                            "role": (
+                                Role.LEADER.value if peep in event._leaders else Role.FOLLOWER.value
+                            ),
+                        }
                         for peep in event.attendees
                     ],
                     "alternates": [
-                        {"id": peep.id, "name": peep.name, "role": peep.role.value}
-                        for peep in event.alt_leaders + event.alt_followers
+                        {"id": peep.id, "name": peep.name, "role": Role.LEADER.value}
+                        for peep in event.alt_leaders
+                    ] + [
+                        {"id": peep.id, "name": peep.name, "role": Role.FOLLOWER.value}
+                        for peep in event.alt_followers
                     ],
                     "leaders_string": event.get_participants_str(Role.LEADER),
                     "followers_string": event.get_participants_str(Role.FOLLOWER),
