@@ -324,19 +324,24 @@ def save_event_sequence(sequence: EventSequence, filename):
 
 # -- Response conversion --
 
-
-def convert_to_json(response_csv_path, peeps_csv_path, output_json_path, year=None):
-    """Main function: convert responses and members CSVs into output.json."""
+def load_period(responses_csv_path, peeps_csv_path, year=None):
+    """Load base period files and build period dict"""
     peeps = load_peeps(peeps_csv_path)
-    response_rows = load_responses(response_csv_path)
+    response_rows = load_responses(responses_csv_path)
     event_map = extract_events(response_rows, year=year)
     updated_peeps, responses_data = process_responses(response_rows, peeps, event_map, year=year)
 
-    output = {
+    period = {
         "responses": responses_data,
         "events": [event.to_dict() for event in event_map.values()],
         "peeps": [peep.to_dict() for peep in updated_peeps],
     }
+    return period
+
+
+def convert_to_json(response_csv_path, peeps_csv_path, output_json_path, year=None):
+    """Convert responses and members CSVs into output.json."""
+    output = load_period(response_csv_path, peeps_csv_path, year)
     save_json(output, output_json_path)
 
 

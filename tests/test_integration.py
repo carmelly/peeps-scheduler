@@ -192,7 +192,9 @@ class TestEndToEndWorkflows:
 
             # Step 2: Run scheduler with load_from_csv=True for full integration test
             # This tests CSV parsing, JSON conversion, and scheduling in one workflow
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
+            scheduler = Scheduler(
+                data_folder=str(period_path), max_events=10, interactive=False, year=2025
+            )
             result = scheduler.run(load_from_csv=True)
 
             # Verify scheduler succeeded (should not return None)

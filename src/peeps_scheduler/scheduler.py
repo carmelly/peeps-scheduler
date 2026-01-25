@@ -16,6 +16,7 @@ class Scheduler:
         sequence_choice=0,
         cancellations_file="cancellations.json",
         partnerships_file="partnerships.json",
+        year=None,
     ):
         self.data_folder = data_folder
         self.max_events = max_events
@@ -27,12 +28,14 @@ class Scheduler:
         self.partnerships_file = partnerships_file
         self.data_manager = get_data_manager()
         self.partnership_requests = {}
+        self.year = year
 
         # Ensure period directory exists
         self.period_path = self.data_manager.ensure_period_exists(data_folder)
         self.output_json = (self.period_path / "output.json").as_posix()
         self.result_json = (self.period_path / "results.json").as_posix()
         self.target_max = None  # max per role used for each run
+
 
     def sanitize_events(self, events, peeps):
         """Sanitize events to ensure there are enough leaders and followers to fill roles."""
@@ -284,14 +287,16 @@ class Scheduler:
         from pathlib import Path
 
         folder_name = Path(self.data_folder).name
-        try:
-            year = (
-                int(folder_name[:4])
-                if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit()
-                else None
-            )
-        except (ValueError, TypeError):
-            year = None
+        year = self.year
+        if year is None:
+            try:
+                year = (
+                    int(folder_name[:4])
+                    if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit()
+                    else None
+                )
+            except (ValueError, TypeError):
+                year = None
 
         if generate_test_data:
             logging.info(f"Generating test data and saving to {self.output_json}")
