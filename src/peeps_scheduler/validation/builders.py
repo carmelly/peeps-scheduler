@@ -1,13 +1,17 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
 from peeps_scheduler.constants import DEFAULT_EVENT_DURATION
-from peeps_scheduler.models import Event, Peep
-from peeps_scheduler.validation.file_schemas.cancellations_json import (
-    CancellationsJsonSchema,
+from peeps_scheduler.models import (
+    CancelledMemberAvailability,
+    Event,
+    PartnershipRequest,
+    Peep,
+    SwitchPreference,
 )
 from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
-from peeps_scheduler.validation.file_schemas.partnerships_json import (
-    PartnershipsJsonSchema,
+from peeps_scheduler.validation.file_schemas.period import (
+    CancelledAvailabilityJsonSchema,
+    PartnershipRequestJsonSchema,
 )
 from peeps_scheduler.validation.file_schemas.responses_csv import (
     ResponsesCsvFileSchema,
@@ -16,7 +20,7 @@ from peeps_scheduler.validation.helpers import normalize_email_for_match
 from peeps_scheduler.validation.parsers import EventSpec
 
 
-def member_to_peep(
+def _member_to_peep(
     member_data: MemberCsvRowSchema, response_data: ResponsesCsvFileSchema | None = None
 ) -> Peep:
     """
@@ -50,29 +54,28 @@ def member_to_peep(
         response = response_data.responses[0]
         peep_data["role"] = response.primary_role
         peep_data["availability"] = [event.start for event in response.availability]
-        peep_data["switch_pref"] = response.secondary_role
+        peep_data["switch_pref"] = response.secondary_role or SwitchPreference.PRIMARY_ONLY
         peep_data["event_limit"] = response.max_sessions
         peep_data["min_interval_days"] = response.min_interval_days
 
     return Peep(**peep_data)
 
 
-def event_spec_to_event(spec: EventSpec) -> Event:
+def _event_spec_to_event(spec: EventSpec) -> Event:
     """
     Convert validated event spec to Event domain object.
     """
-    date = spec.start
     duration_minutes = spec.duration_minutes
     # if spec was validated with no duration, assign the default duration now
     if spec.duration_minutes is None:
         duration_minutes = DEFAULT_EVENT_DURATION
     return Event(
-        date=date,
+        date=spec.start,
         duration_minutes=duration_minutes,
     )
 
 
-def convert_to_peeps(
+def build_peeps(
     member_dicts: list[MemberCsvRowSchema], response_dicts: ResponsesCsvFileSchema | dict
 ) -> list[Peep]:
     """
@@ -114,80 +117,103 @@ def convert_to_peeps(
         response_to_pass = None
         if matching_response:
             response_to_pass = ResponsesCsvFileSchema(responses=[matching_response], event_rows=[])
-        peep = member_to_peep(member, response_to_pass)
+
+        peep = _member_to_peep(member, response_to_pass)
         peeps.append(peep)
 
     return peeps
 
 
-def extract_cancellations(
-    validated_cancellations: CancellationsJsonSchema | None,
-) -> tuple[set[str], dict[str, set[str]]]:
+def build_events(
+    event_specs: list[EventSpec],
+) -> list[Event]:
     """
-    Extract cancellation data from validated cancellations.
+    Build domain dataclasses from validated schemas.
 
     Args:
-        validated_cancellations: Validated CancellationsJsonSchema, or None if file missing
-
+        event_specs: Validated EventSpec list
     Returns:
-        Tuple of (cancelled_event_ids, cancelled_availability)
-        Returns (set(), {}) if input is None
+        Event objects
     """
-    if validated_cancellations is None:
-        return set(), {}
-
-    cancelled_events = validated_cancellations.cancelled_events
-    cancelled_event_ids = set()
-    for event in cancelled_events:
-        # Extract event_id from start datetime (format: YYYY-MM-DD HH:MM)
-        start = event.start
-        if start:
-            event_id = start.strftime("%Y-%m-%d %H:%M")
-            cancelled_event_ids.add(event_id)
-
-    cancelled_avail = validated_cancellations.cancelled_availability
-    cancelled_availability = {}
-    for avail in cancelled_avail:
-        email = avail.email
-        if not email:
-            continue
-
-        events = avail.events
-        for event in events:
-            start = event.start
-            if start:
-                event_id = start.strftime("%Y-%m-%d %H:%M")
-                if email not in cancelled_availability:
-                    cancelled_availability[email] = set()
-                cancelled_availability[email].add(event_id)
-
-    return cancelled_event_ids, cancelled_availability
+    events = [_event_spec_to_event(spec) for spec in event_specs]
+    return events
 
 
-def extract_partnerships(
-    validated_partnerships: PartnershipsJsonSchema | None,
-) -> dict[int, set[int]]:
+def build_cancelled_events(
+    cancelled_event_specs: list[EventSpec], events: list[Event]
+) -> list[Event]:
     """
-    Extract partnership mapping from validated partnerships.
+    Build domain dataclasses from validated schemas by resolving object references.
 
     Args:
-        validated_partnerships: Validated PartnershipsJsonSchema, or None if file missing
+        cancelled_event_specs: Validated EventSpec list
+        events: Event objects to resolve EventSpecs against
+    Returns:
+        list of Event object references
+    """
+    # maps events by start datetime for lookup
+    events_by_datetime = {event.date: event for event in events}
+
+    # since period is already validated, all references should resolve
+    cancelled_events = [events_by_datetime.get(spec.start) for spec in cancelled_event_specs]
+    return cancelled_events
+
+
+def build_cancelled_availability(
+    schemas: list[CancelledAvailabilityJsonSchema], peeps: list[Peep], events: list[Event]
+) -> list[CancelledMemberAvailability]:
+    """
+    Build domain dataclasses from validated schemas by resolving object references.
+
+    Args:
+        schemas: Validated CancelledAvailabilityJsonSchema list (emails/EventSpecs parsed)
+        peeps: Peep objects to resolve emails against
+        events: Event objects to resolve EventSpecs against
 
     Returns:
-        Dict mapping requester_id → set of partner_ids
-        Returns {} if input is None
+        CancelledMemberAvailability dataclasses with Peep/Event object references
     """
-    if validated_partnerships is None:
-        return {}
+    # maps peeps by normalized email for lookup
+    peeps_by_email = {normalize_email_for_match(peep.email): peep for peep in peeps}
+    # maps events by start datetime for lookup
+    events_by_datetime = {event.date: event for event in events}
 
-    partnerships = {}
-    partnerships_list = validated_partnerships.partnerships
-    for partnership in partnerships_list:
-        requester_id = partnership.requester_id
-        target_ids = partnership.target_ids
-        if requester_id:
-            partnerships[requester_id] = set(target_ids) if target_ids else set()
+    # since period is already validated, all references should resolve
+    cancelled_availability_list = [
+        CancelledMemberAvailability(
+            peep=peeps_by_email.get(normalize_email_for_match(schema.member_email)),
+            events=[events_by_datetime.get(event_spec.start) for event_spec in schema.events],
+        )
+        for schema in schemas
+    ]
+    return cancelled_availability_list
 
-    return partnerships
 
+def build_partnerships(
+    schemas: list[PartnershipRequestJsonSchema], peeps: list[Peep]
+) -> list[PartnershipRequest]:
+    """
+    Build domain dataclasses from validated schemas by resolving object references.
 
+    Args:
+        schemas: Validated PartnershipRequestJsonSchema list
+        peeps: Peep objects to resolve emails against
+
+    Returns:
+        PartnershipRequest dataclasses with Peep object references
+    """
+    # maps peeps by normalized email for lookup
+    peeps_by_email = {normalize_email_for_match(peep.email): peep for peep in peeps}
+
+    # since period is already validated, all references should resolve
+    partnership_requests = [
+        PartnershipRequest(
+            requester=peeps_by_email.get(normalize_email_for_match(schema.requester_email)),
+            target_peeps=[
+                peeps_by_email.get(normalize_email_for_match(target_email))
+                for target_email in schema.target_emails
+            ],
+        )
+        for schema in schemas
+    ]
+    return partnership_requests

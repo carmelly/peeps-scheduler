@@ -7,17 +7,17 @@ file IO happens elsewhere.
 
 Public API:
   - Schemas: Direct Pydantic validation (MembersCsvFileSchema, ResponsesCsvFileSchema, etc.)
-  - Converters: Validated data → domain objects (member_to_peep, convert_to_peeps, etc.)
+  - Builders: Validated data → domain objects (build_peeps, build_events, etc.)
   - Period orchestration: Complete period loading (load_and_validate_period, PeriodData)
 """
 
-# Validation wrappers (CSV/JSON → validated dicts) and converters (schemas → domain objects)
-from peeps_scheduler.validation.converters import (
-    convert_to_peeps,
-    event_spec_to_event,
-    extract_cancellations,
-    extract_partnerships,
-    member_to_peep,
+# Builders (schemas → domain objects)
+from peeps_scheduler.validation.builders import (
+    build_cancelled_availability,
+    build_cancelled_events,
+    build_events,
+    build_partnerships,
+    build_peeps,
 )
 
 # Errors
@@ -29,15 +29,10 @@ from peeps_scheduler.validation.file_schemas.attendance_json import (
     AttendanceEventJsonSchema,
     RosterEntryJsonSchema,
 )
-from peeps_scheduler.validation.file_schemas.cancellations_json import (
-    CancelledAvailabilityJsonSchema,
-    CancelledEventJsonSchema,
-)
 from peeps_scheduler.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.partnerships_json import PartnershipRequestJsonSchema
 from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
 from peeps_scheduler.validation.file_schemas.responses_csv import (
     EventRowCsvSchema,
@@ -75,12 +70,12 @@ __all__ = [
     "ResultEventJsonSchema",
     "ResultsJsonSchema",
     "RosterEntryJsonSchema",
-    "convert_to_peeps",
-    "event_spec_to_event",
-    "extract_cancellations",
-    "extract_partnerships",
+    "build_cancelled_availability",
+    "build_cancelled_events",
+    "build_events",
+    "build_partnerships",
+    "build_peeps",
     "load_and_validate_period",
     "load_period_files",
-    "member_to_peep",
     "to_period_data",
 ]

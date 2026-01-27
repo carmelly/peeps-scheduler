@@ -32,4 +32,4 @@ PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps-data")
 PARTNERSHIPS_FILE = "partnerships.json"
 
 # Default timezone
-TIMEZONE = ZoneInfo("America/Los_Angeles")
+DEFAULT_TIMEZONE = ZoneInfo("America/Los_Angeles")

@@ -62,28 +62,6 @@ def event_row_data(overrides: dict | None = None) -> dict:
     return {**defaults, **(overrides or {})}
 
 
-def cancellations_data(overrides: dict | None = None) -> dict:
-    """Factory for valid cancellations JSON test data.
-
-    Creates default cancelled events and availability entries.
-    """
-    defaults = {
-        "cancelled_events": [
-            "Friday January 10th - 5:30pm to 7pm",  # new format
-        ],
-        "cancelled_availability": [
-            {
-                "email": "alice@test.com",
-                "events": [
-                    "Saturday January 4 - 1pm",  # old format
-                    "Friday January 10th - 3pm",  # old with ordinal suffix
-                ],
-            }
-        ],
-    }
-    return {**defaults, **(overrides or {})}
-
-
 def attendance_event_data(overrides: dict | None = None) -> dict:
     """Factory for valid AttendanceEventJsonSchema test data.
 

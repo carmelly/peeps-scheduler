@@ -8,13 +8,19 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from peeps_scheduler import file_io
-from peeps_scheduler.constants import DEFAULT_EVENT_DURATION, TIMEZONE
-from peeps_scheduler.models import Event, Peep
-from peeps_scheduler.validation.converters import (
-    convert_to_peeps,
+from peeps_scheduler.constants import DEFAULT_TIMEZONE
+from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
+from peeps_scheduler.validation.builders import (
+    build_cancelled_availability,
+    build_cancelled_events,
+    build_events,
+    build_partnerships,
+    build_peeps,
 )
 from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.validation.file_schemas.period import (
+    PeriodFileSchema,
+)
 
 
 @dataclass(frozen=True)
@@ -23,9 +29,9 @@ class PeriodData:
 
     peeps: list[Peep]
     events: list[Event]
-    cancelled_event_ids: set[str]
-    cancelled_availability: dict[str, set[str]]  # email → event_ids
-    partnerships: dict[int, set[int]]  # requester_id → partner_ids
+    cancelled_events: list[Event] = ()
+    cancelled_member_availability: list[CancelledMemberAvailability] = ()
+    partnership_requests: list[PartnershipRequest] = ()
 
 
 def load_and_validate_period(period_path: str, year: int) -> PeriodData:
@@ -46,7 +52,7 @@ def load_and_validate_period(period_path: str, year: int) -> PeriodData:
         FileValidationError: If validation fails
     """
     raw = load_period_files(period_path)
-    ctx = ValidationContext(year=year, tz=TIMEZONE)
+    ctx = ValidationContext(year=year, tz=DEFAULT_TIMEZONE)
     period_schema = PeriodFileSchema.model_validate(raw, context={"ctx": ctx})
     return to_period_data(period_schema, year)
 
@@ -65,8 +71,7 @@ def load_period_files(period_path: str) -> dict:
     # Define file paths
     members_file = period_dir / "members.csv"
     responses_file = period_dir / "responses.csv"
-    cancellations_file = period_dir / "cancellations.json"
-    partnerships_file = period_dir / "partnerships.json"
+    period_config_file = period_dir / "period_config.json"
 
     # Check required files exist
     if not members_file.is_file():
@@ -78,19 +83,11 @@ def load_period_files(period_path: str) -> dict:
     member_rows = file_io.load_csv(str(members_file))
     response_rows = file_io.load_csv(str(responses_file))
 
-    # Load optional JSON files (return None if missing)
-    cancellations_data = None
-    if cancellations_file.is_file():
-        with cancellations_file.open() as f:
-            cancellations_data = json.load(f)
-
-    partnerships_data = None
-    if partnerships_file.is_file():
-        with partnerships_file.open() as f:
-            partnerships_dict = json.load(f)
-            # Convert flat dict to list of single-entry dicts for schema validation
-            # {"1": [2, 3]} -> [{"1": [2, 3]}]
-            partnerships_data = [{requester_id: partner_ids} for requester_id, partner_ids in partnerships_dict.items()]
+    # Load optional period_config.json (contains cancellations and partnerships)
+    period_config_data = {}
+    if period_config_file.is_file():
+        with period_config_file.open() as f:
+            period_config_data = json.load(f)
 
     return {
         "members": member_rows,
@@ -98,8 +95,11 @@ def load_period_files(period_path: str) -> dict:
             "responses": response_rows,
             "event_rows": None,
         },
-        "cancelled_events": cancellations_data,
-        "partnerships": partnerships_data,
+        "cancelled_events": period_config_data.get("cancelled_events", []),
+        "cancelled_member_availability": period_config_data.get(
+            "cancelled_member_availability", []
+        ),
+        "partnership_requests": period_config_data.get("partnership_requests", []),
     }
 
 
@@ -114,59 +114,18 @@ def to_period_data(period_schema: PeriodFileSchema, year: int) -> PeriodData:
     Returns:
         PeriodData with all components assembled
     """
-    # Extract members from schema
-    members = period_schema.members.root
-
-    # Convert to peeps
-    peeps = convert_to_peeps(members, period_schema.responses)
-
-    # Convert events from schema.responses.events (EventSpecs)
-    events = [
-        Event(date=spec.start, duration_minutes=spec.duration_minutes or DEFAULT_EVENT_DURATION)
-        for spec in period_schema.responses.events
-    ]
-
-    # Extract cancellations
-    if period_schema.cancelled_events:
-        # Convert CancelledEventJsonSchema to CancellationsJsonSchema format
-        cancelled_event_ids = set()
-        for event in period_schema.cancelled_events.cancelled_events:
-            start = event.start
-            if start:
-                event_id = start.strftime("%Y-%m-%d %H:%M")
-                cancelled_event_ids.add(event_id)
-    else:
-        cancelled_event_ids = set()
-
-    # Handle cancelled availability
-    cancelled_availability = {}
-    if period_schema.cancelled_availability:
-        for avail in period_schema.cancelled_availability:
-            email = avail.email
-            if not email:
-                continue
-            events_set = set()
-            for event in avail.events:
-                start = event.start
-                if start:
-                    event_id = start.strftime("%Y-%m-%d %H:%M")
-                    events_set.add(event_id)
-            if events_set:
-                cancelled_availability[email] = events_set
-
-    # Extract partnerships
-    partnerships = {}
-    if period_schema.partnerships:
-        for partnership in period_schema.partnerships:
-            requester_id = partnership.requester_id
-            target_ids = partnership.target_ids
-            if requester_id:
-                partnerships[requester_id] = set(target_ids) if target_ids else set()
+    peeps = build_peeps(period_schema.members.root, period_schema.responses)
+    events = build_events(period_schema.responses.events)
+    cancelled_events = build_cancelled_events(period_schema.cancelled_events, events)
+    cancelled_availability = build_cancelled_availability(
+        period_schema.cancelled_member_availability, peeps, events
+    )
+    partnership_requests = build_partnerships(period_schema.partnership_requests, peeps)
 
     return PeriodData(
         peeps=peeps,
         events=events,
-        cancelled_event_ids=cancelled_event_ids,
-        cancelled_availability=cancelled_availability,
-        partnerships=partnerships,
+        cancelled_events=cancelled_events,
+        cancelled_member_availability=cancelled_availability,
+        partnership_requests=partnership_requests,
     )

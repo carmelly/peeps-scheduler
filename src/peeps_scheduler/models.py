@@ -2,6 +2,7 @@ import datetime
 import itertools
 import logging
 import random
+from dataclasses import dataclass
 from enum import Enum
 import peeps_scheduler.constants as constants
 from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
@@ -878,3 +879,19 @@ class EventSequence:
         result += f"\n\tUnscheduled Peeps ({len(unassigned)}): {', '.join(sorted(unassigned)) if unassigned else 'None'}"
 
         return result
+
+
+@dataclass
+class CancelledMemberAvailability:
+    """Member unavailable for specific events during a period."""
+
+    peep: Peep
+    events: list[Event]
+
+
+@dataclass
+class PartnershipRequest:
+    """Request for peep to dance with specific target peeps."""
+
+    requester: Peep
+    target_peeps: list[Peep]
