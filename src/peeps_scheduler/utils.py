@@ -161,9 +161,9 @@ def print_results_summary(period_slug, results_filename="results.json"):
                     follower_names.append(str(name))
 
             if leader_names:
-                leaders = f"Leaders({len(leader_names)}): {', '.join(leader_names)}"
+                leaders = f"Leaders({len(leader_names)}): {', '.join(sorted(leader_names))}"
             if follower_names:
-                followers = f"Followers({len(follower_names)}): {', '.join(follower_names)}"
+                followers = f"Followers({len(follower_names)}): {', '.join(sorted(follower_names))}"
         topic_scores = event.get("topic_scores", [])
 
         try:
