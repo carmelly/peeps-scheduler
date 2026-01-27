@@ -34,9 +34,9 @@ addopts = [
   "--strict-markers",
   "--tb=short",
   "--import-mode=importlib",
-  "--cov",
-  "--cov-report=term",
-  "--cov-report=lcov:lcov.info",
+#   "--cov",
+#   "--cov-report=term",
+#   "--cov-report=lcov:lcov.info",
 ]
 markers = [
   "unit: unit tests that test a single component in isolation",

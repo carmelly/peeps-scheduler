@@ -10,6 +10,14 @@
     "MD050": { "style": "asterisk" }, // strong style: prefer asterisks
     "MD004": { "style": "dash" } // ul-style: prefer dashes
   },
-  "globs": ["**/*.md"],
-  "ignores": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.venv/**"]
+  "globs": [ "**/*.md" ],
+  "ignores": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/overlay/**/plan/**",
+    "**/overlay/**/issues/**",
+    "**/*.sh"
+  ]
 }
