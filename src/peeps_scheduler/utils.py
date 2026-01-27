@@ -126,7 +126,7 @@ def print_results_summary(period_slug, results_filename="results.json"):
     results_path = period_path / results_filename
 
     if not results_path.exists():
-        raise FileNotFoundError(f"results.json not found: {results_path}")
+        raise FileNotFoundError(f"Results file not found: {results_path}")
 
     with results_path.open(encoding="utf-8") as f:
         results = json.load(f)
@@ -146,6 +146,24 @@ def print_results_summary(period_slug, results_filename="results.json"):
         topic = event.get("topic")
         leaders = event.get("leaders_string", "")
         followers = event.get("followers_string", "")
+        if not leaders and not followers:
+            attendees = event.get("attendees", []) or []
+            leader_names = []
+            follower_names = []
+            for attendee in attendees:
+                name = attendee.get("name") or attendee.get("id")
+                if not name:
+                    continue
+                role = str(attendee.get("role", "")).lower()
+                if role == "leader":
+                    leader_names.append(str(name))
+                elif role == "follower":
+                    follower_names.append(str(name))
+
+            if leader_names:
+                leaders = f"Leaders({len(leader_names)}): {', '.join(leader_names)}"
+            if follower_names:
+                followers = f"Followers({len(follower_names)}): {', '.join(follower_names)}"
         topic_scores = event.get("topic_scores", [])
 
         try:
