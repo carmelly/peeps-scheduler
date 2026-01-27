@@ -225,17 +225,6 @@ class TestEventSpecToEvent:
         assert event.date == spec.start
         assert event.duration_minutes == spec.duration_minutes
 
-    def test_event_duration_none_gets_default_duration(self, ctx):
-        """EventSpecs with no duration generate Events with default duration"""
-        spec = EventSpec(
-            start=datetime.datetime(2020, 1, 4, 13, 0),
-            duration_minutes=None,
-            raw="Saturday January 4 - 1pm",
-        )
-        event = _event_spec_to_event(spec)
-
-        assert event.duration_minutes == DEFAULT_EVENT_DURATION
-
 
 @pytest.mark.contract
 class TestBuildPeeps:
@@ -260,30 +249,6 @@ class TestBuildPeeps:
         assert isinstance(peeps[0], Peep)
         assert peeps[0].full_name == "Alice Alpha"
         assert peeps[0].responded is True
-
-    def test_secondary_role_none_coerced_to_primary_only(self, ctx):
-        """Edge case: Secondary role of None becomes SwitchPreference.PRIMARY_ONLY."""
-
-        validated_members = MembersCsvFileSchema.model_validate([member_data()]).root
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        validated_responses = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [
-                    response_data(
-                        {
-                            "Secondary Role": None,
-                        }
-                    )
-                ],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
-        )
-
-        peeps = build_peeps(validated_members, validated_responses)
-
-        assert len(peeps) == 1
-        assert peeps[0].switch_pref == SwitchPreference.PRIMARY_ONLY
 
     def test_handles_members_without_responses(self, ctx):
         """Edge case: Members without responses are still converted to Peeps."""

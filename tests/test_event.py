@@ -410,6 +410,14 @@ class TestEventDataConversion:
         assert event.date == datetime.datetime(2025, 7, 20, 18, 0)
         assert event.duration_minutes == 120
 
+    def test_assigns_default_duration_if_missing(self):
+        """Test that from_dict assigns default duration if missing."""
+        original_data = {"id": 456, "date": datetime.datetime(2025, 8, 10, 17, 30)}
+
+        event = Event(**original_data)
+
+        assert event.duration_minutes == constants.DEFAULT_EVENT_DURATION
+
 
 class TestEventAlternateValidation:
     """Test alternate validation and cleanup."""

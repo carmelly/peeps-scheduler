@@ -1,12 +1,10 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from peeps_scheduler.constants import DEFAULT_EVENT_DURATION
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
     PartnershipRequest,
     Peep,
-    SwitchPreference,
 )
 from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
 from peeps_scheduler.validation.file_schemas.period import (
@@ -54,7 +52,7 @@ def _member_to_peep(
         response = response_data.responses[0]
         peep_data["role"] = response.primary_role
         peep_data["availability"] = [event.start for event in response.availability]
-        peep_data["switch_pref"] = response.secondary_role or SwitchPreference.PRIMARY_ONLY
+        peep_data["switch_pref"] = response.secondary_role
         peep_data["event_limit"] = response.max_sessions
         peep_data["min_interval_days"] = response.min_interval_days
 
@@ -65,14 +63,7 @@ def _event_spec_to_event(spec: EventSpec) -> Event:
     """
     Convert validated event spec to Event domain object.
     """
-    duration_minutes = spec.duration_minutes
-    # if spec was validated with no duration, assign the default duration now
-    if spec.duration_minutes is None:
-        duration_minutes = DEFAULT_EVENT_DURATION
-    return Event(
-        date=spec.start,
-        duration_minutes=duration_minutes,
-    )
+    return Event(date=spec.start, duration_minutes=spec.duration_minutes)
 
 
 def build_peeps(

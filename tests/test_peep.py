@@ -93,8 +93,6 @@ class TestPeepConstraints:
         assert not peep.can_attend(event)
 
 
-
-
 class TestDataConversion:
     """Test CSV/dict conversion for data pipeline."""
 
@@ -178,3 +176,9 @@ class TestDataConversion:
         """Test that constructor raises clear error for missing role."""
         with pytest.raises(ValueError, match="peep requires a 'role' field"):
             Peep(id=1)
+
+    def test_assigns_default_switch_preference_if_missing(self):
+        """Test that constructor assigns default switch preference if not provided."""
+        peep = Peep(id=1, role="leader", switch_pref=None)
+
+        assert peep.switch_pref == peep.switch_pref.PRIMARY_ONLY

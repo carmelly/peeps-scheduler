@@ -74,7 +74,7 @@ class Peep:
         except ValueError as e:
             raise ValueError(f"invalid role '{role_input}': {e!s}") from e
 
-        switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
+        switch_input = kwargs.get("switch_pref") or SwitchPreference.PRIMARY_ONLY
         self.switch_pref = (
             switch_input
             if isinstance(switch_input, SwitchPreference)
@@ -258,7 +258,7 @@ class Event:
         self.id = kwargs.get("id", 0)
         self.date = kwargs.get("date")  # TODO: validate that this is a datetime
 
-        self.duration_minutes = kwargs.get("duration_minutes")
+        self.duration_minutes = kwargs.get("duration_minutes") or constants.DEFAULT_EVENT_DURATION
         if self.duration_minutes not in constants.CLASS_CONFIG:
             raise ValueError(f"unknown event duration: {self.duration_minutes}")
 
