@@ -55,6 +55,7 @@ def _member_to_peep(
         peep_data["switch_pref"] = response.secondary_role
         peep_data["event_limit"] = response.max_sessions
         peep_data["min_interval_days"] = response.min_interval_days
+        peep_data["topic_votes"] = response.deep_dive_topics
 
     return Peep(**peep_data)
 

@@ -2,7 +2,7 @@
 
 import datetime
 import pytest
-from peeps_scheduler.constants import DEFAULT_EVENT_DURATION, DEFAULT_TIMEZONE
+from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
@@ -171,6 +171,34 @@ class TestMemberToPeep:
         peep = _member_to_peep(member_schema, response_schema)
 
         assert peep.min_interval_days == 7
+
+    def test_member_with_response_sets_topic_votes(self, ctx):
+        """Edge case: Response deep dive topics become peep topic votes."""
+        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
+        member_schema = member_schemas[0]
+        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
+        response_schema = ResponsesCsvFileSchema.model_validate(
+            {
+                "responses": [
+                    response_data(
+                        {
+                            "Deep Dive Topics": (
+                                "Balance for Spins and Turns, Angles for Shaping & Slotting"
+                            )
+                        }
+                    )
+                ],
+                "event_rows": None,
+            },
+            context={"ctx": response_ctx},
+        )
+
+        peep = _member_to_peep(member_schema, response_schema)
+
+        assert peep.topic_votes == [
+            "Balance for Spins and Turns",
+            "Angles for Shaping & Slotting",
+        ]
 
     def test_member_with_response_marks_responded(self, ctx):
         """Edge case: responded flag is True when response provided."""

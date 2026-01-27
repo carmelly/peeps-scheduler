@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pydantic import (
     BaseModel,
@@ -21,6 +22,16 @@ from peeps_scheduler.validation.helpers import normalize_email_for_match, valida
 from peeps_scheduler.validation.parsers import EventSpec, parse_event_name, parse_switch_preference
 
 
+def _strip_parenthetical(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r"\([^)]*\)", "", value)
+
+
+def _normalize_topic(value: str) -> str:
+    return " ".join(_strip_parenthetical(value).split()).strip()
+
+
 class ResponseCsvRowSchema(BaseModel):
     """Schema for validating response rows in responses.csv."""
 
@@ -38,6 +49,7 @@ class ResponseCsvRowSchema(BaseModel):
     display_name: OptionalPersonNameStr = Field(alias="Display Name", default=None)
     secondary_role: SwitchPreference | None = Field(alias="Secondary Role", default=None)
     availability: EventSpecList = Field(alias="Availability")
+    deep_dive_topics: list[str] = Field(alias="Deep Dive Topics", default_factory=list)
 
     @field_validator("timestamp", mode="before")
     @classmethod
@@ -59,6 +71,24 @@ class ResponseCsvRowSchema(BaseModel):
         if not isinstance(v, str):
             raise ValueError("Secondary Role must be a string")
         return parse_switch_preference(v)
+
+    @field_validator("deep_dive_topics", mode="before")
+    @classmethod
+    def validate_deep_dive_topics(cls, v):
+        """Parse optional deep dive topics from a comma-separated string."""
+        if v is None:
+            return []
+        if isinstance(v, list):
+            normalized = [_normalize_topic(str(item)) for item in v]
+            return [item for item in normalized if item]
+        if isinstance(v, str):
+            if v.strip() == "":
+                return []
+            cleaned = _strip_parenthetical(v)
+            parts = [part.strip() for part in cleaned.split(",")]
+            normalized = [_normalize_topic(part) for part in parts]
+            return [part for part in normalized if part]
+        raise ValueError("Deep Dive Topics must be a comma-separated string")
 
     @field_validator("availability", mode="after")
     @classmethod

@@ -57,8 +57,8 @@ def make_event(event_id: int, attendees: list[int], alternates: list[int] | None
     }
 
 
-def write_topics_json(path: Path, topics: list[str]) -> None:
-    path.write_text(json.dumps({"valid_topics": topics}, indent=2), encoding="utf-8")
+def write_period_config_json_with_topics(path: Path, topics: list[str]) -> None:
+    path.write_text(json.dumps({"topics": topics}, indent=2), encoding="utf-8")
 
 
 class TestAssignTopicsConstraints:
@@ -82,7 +82,9 @@ class TestAssignTopicsConstraints:
                 ("carol@example.com", "Topic A, Topic C"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic A", "Topic C"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic A", "Topic C"]
+        )
         write_results_json(
             period_path / "results.json",
             [
@@ -115,7 +117,7 @@ class TestAssignTopicsConstraints:
                 ("bob@example.com", "Topic A"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic A"])
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Topic A"])
         write_results_json(
             period_path / "results.json",
             [
@@ -141,7 +143,7 @@ class TestAssignTopicsScoring:
             [(1, "Alice Alpha", "Alice", "alice@example.com")],
         )
         write_responses_csv(period_path / "responses.csv", [("alice@example.com", "Topic B")])
-        write_topics_json(period_path / "topics.json", ["Topic A"])
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Topic A"])
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1])])
 
         assign_topics_for_period(period_path)
@@ -167,7 +169,9 @@ class TestAssignTopicsScoring:
                 ("bob@example.com", "Topic B"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic A", "Topic B"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic A", "Topic B"]
+        )
         write_results_json(
             period_path / "results.json",
             [make_event(1, attendees=[1], alternates=[2])],
@@ -187,7 +191,9 @@ class TestAssignTopicsScoring:
             [(1, "Alice Alpha", "Alice", "alice@example.com")],
         )
         write_responses_csv(period_path / "responses.csv", [("alice@example.com", "Write In")])
-        write_topics_json(period_path / "topics.json", ["Topic B", "Topic A"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic B", "Topic A"]
+        )
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1])])
 
         assign_topics_for_period(period_path)
@@ -213,7 +219,9 @@ class TestAssignTopicsScoring:
                 ("bob@example.com", "Write In"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic A", "Topic B"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic A", "Topic B"]
+        )
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1, 2])])
 
         assign_topics_for_period(period_path)
@@ -239,7 +247,9 @@ class TestAssignTopicsScoring:
                 ("bob@example.com", "Topic A"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic B", "Topic A"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic B", "Topic A"]
+        )
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1, 2])])
 
         assign_topics_for_period(period_path)
@@ -258,10 +268,8 @@ class TestAssignTopicsInputHandling:
             [(1, "Alice Alpha", "Alice", "alice@example.com")],
         )
         responses_path = period_path / "responses.csv"
-        responses_path.write_text(
-            "Email Address,Name\nalice@example.com,Alice\n", encoding="utf-8"
-        )
-        write_topics_json(period_path / "topics.json", ["Topic A"])
+        responses_path.write_text("Email Address,Name\nalice@example.com,Alice\n", encoding="utf-8")
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Topic A"])
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1])])
 
         assign_topics_for_period(period_path)
@@ -278,10 +286,8 @@ class TestAssignTopicsInputHandling:
             [(1, "Alice Alpha", "Alice", "alice@example.com")],
         )
         responses_path = period_path / "responses.csv"
-        responses_path.write_text(
-            "Email Address,Name\nalice@example.com,Alice\n", encoding="utf-8"
-        )
-        write_topics_json(period_path / "topics.json", ["Topic A"])
+        responses_path.write_text("Email Address,Name\nalice@example.com,Alice\n", encoding="utf-8")
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Topic A"])
         original = write_results_json(period_path / "results.json", [make_event(1, attendees=[1])])
 
         assign_topics_for_period(period_path)
@@ -306,7 +312,7 @@ class TestAssignTopicsInputHandling:
                 )
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Rhythm & Blues"])
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Rhythm & Blues"])
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1])])
 
         assign_topics_for_period(period_path)
@@ -325,7 +331,7 @@ class TestAssignTopicsOutput:
             [(1, "Alice Alpha", "Alice", "alice@example.com")],
         )
         write_responses_csv(period_path / "responses.csv", [("alice@example.com", "Topic A")])
-        write_topics_json(period_path / "topics.json", ["Topic A"])
+        write_period_config_json_with_topics(period_path / "period_config.json", ["Topic A"])
         original = write_results_json(
             period_path / "results.json",
             [make_event(1, attendees=[1])],
@@ -369,7 +375,9 @@ class TestAssignTopicsOutput:
                 ("bob@example.com", "Topic A"),
             ],
         )
-        write_topics_json(period_path / "topics.json", ["Topic A", "Topic B", "Topic C"])
+        write_period_config_json_with_topics(
+            period_path / "period_config.json", ["Topic A", "Topic B", "Topic C"]
+        )
         write_results_json(period_path / "results.json", [make_event(1, attendees=[1, 2])])
 
         assign_topics_for_period(period_path)

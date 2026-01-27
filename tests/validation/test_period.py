@@ -10,7 +10,6 @@ from peeps_scheduler.models import (
     Event,
     PartnershipRequest,
     Peep,
-    Role,
 )
 from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
 from peeps_scheduler.validation.period import (
@@ -59,11 +58,12 @@ def temp_period_dir(ctx):
       {
         "cancelled_events": ["Saturday January 11 - 1pm"],
         "cancelled_member_availability": [
-          {"member_id": 2, "availability": "Saturday January 4 - 1pm"}
+          {"member_email": "bob@test.com", "events": ["Saturday January 4 - 1pm"]}
         ],
         "partnership_requests": [
-          {"requester_id": 1, "partner_id": 2}
-        ]
+          {"requester_email": "alice@test.com", "target_emails": ["bob@test.com", "carol@test.com"]}
+        ],
+        "topics": ["Balance for Spins and Turns", "Angles for Shaping & Slotting"]
       }
 
     Example assertions you can write after calling load_and_validate_period/ to_period_data:
@@ -120,6 +120,7 @@ def temp_period_dir(ctx):
                             "target_emails": ["bob@test.com", "carol@test.com"],
                         }
                     ],
+                    "topics": ["Balance for Spins and Turns", "Angles for Shaping & Slotting"],
                 }
             )
         )
@@ -150,6 +151,7 @@ class TestPeriodSchemaIntegration:
         assert isinstance(period_data_obj.events, list)
         assert isinstance(period_data_obj.cancelled_events, list)
         assert isinstance(period_data_obj.partnership_requests, list)
+        assert isinstance(period_data_obj.topics, list)
 
     def test_to_period_data_converts_event_specs_to_events(self, ctx):
         """Contract: to_period_data() converts EventSpec to Event domain objects."""
@@ -185,6 +187,7 @@ class TestPeriodSchemaIntegration:
         assert isinstance(period_data, PeriodData)
         assert isinstance(period_data.cancelled_member_availability, list)
         assert isinstance(period_data.partnership_requests, list)
+        assert isinstance(period_data.topics, list)
 
         # Simple indexed identifier checks (fixture order is deterministic)
         # First peep should be Alice
@@ -220,6 +223,10 @@ class TestPeriodSchemaIntegration:
         assert isinstance(period_data.partnership_requests[0], PartnershipRequest)
         assert period_data.partnership_requests[0].requester == alice
         assert period_data.partnership_requests[0].target_peeps == [bob, carol]
+        assert period_data.topics == [
+            "Balance for Spins and Turns",
+            "Angles for Shaping & Slotting",
+        ]
 
 
 @pytest.mark.unit
@@ -238,6 +245,7 @@ class TestToPeriodData:
         assert hasattr(result, "cancelled_events")
         assert hasattr(result, "cancelled_member_availability")
         assert hasattr(result, "partnership_requests")
+        assert hasattr(result, "topics")
 
     def test_populates_peeps_from_schema(self, ctx):
         """Contract: Peeps populated correctly from schema members and responses."""
@@ -321,6 +329,7 @@ class TestLoadAndValidatePeriod:
             isinstance(p_request, PartnershipRequest)
             for p_request in period_data.partnership_requests
         )
+        assert all(isinstance(topic, str) for topic in period_data.topics)
 
     def test_load_and_validate_period_creates_peeps(self, ctx, temp_period_dir):
         """Field mapping: Peeps created from members and responses."""
@@ -366,6 +375,7 @@ class TestLoadAndValidatePeriod:
         assert period_data.cancelled_events == []
         assert period_data.cancelled_member_availability == []
         assert period_data.partnership_requests == []
+        assert period_data.topics == []
 
     def test_load_and_validate_period_deduplicates_events(self, ctx, temp_period_dir):
         """Field mapping: Events deduplicated when multiple people share availability."""

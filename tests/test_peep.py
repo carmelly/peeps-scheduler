@@ -166,6 +166,7 @@ class TestDataConversion:
         assert peep.availability == []
         assert peep.event_limit == 0
         assert peep.min_interval_days == 0
+        assert peep.topic_votes == []
 
     def test_constructor_requires_id(self):
         """Test that constructor raises clear error for missing ID."""

@@ -5,7 +5,6 @@ import json
 import logging
 import re
 from pathlib import Path
-
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.file_io import load_csv, normalize_email
 
@@ -19,15 +18,15 @@ def assign_topics(period_slug: str) -> None:
     assign_topics_for_period(period_path)
 
 
-def _load_valid_topics(topics_path: Path) -> list[str]:
-    with topics_path.open(encoding="utf-8") as f:
+def _load_valid_topics(period_config_path: Path) -> list[str]:
+    with period_config_path.open(encoding="utf-8") as f:
         data = json.load(f)
-    if not isinstance(data, dict) or "valid_topics" not in data:
-        raise ValueError("topics.json must contain a 'valid_topics' list.")
-    valid_topics = data["valid_topics"]
-    if not isinstance(valid_topics, list):
-        raise ValueError("topics.json 'valid_topics' must be a list.")
-    return [str(topic) for topic in valid_topics]
+    if not isinstance(data, dict) or "topics" not in data:
+        raise ValueError("period_config.json must contain a 'topics' list.")
+    topics = data["topics"]
+    if not isinstance(topics, list):
+        raise ValueError("period_config.json 'topics' must be a list.")
+    return [str(topic) for topic in topics]
 
 
 def _strip_parenthetical(value: str) -> str:
@@ -57,10 +56,10 @@ def _build_topic_lookup(valid_topics: list[str]) -> dict[str, str]:
     for topic in valid_topics:
         normalized = _normalize_topic(topic)
         if not normalized:
-            raise ValueError("topics.json contains a blank topic.")
+            raise ValueError("topics list contains a blank topic.")
         if normalized in lookup and lookup[normalized] != topic:
             raise ValueError(
-                "topics.json contains duplicate topics after normalization: "
+                "topics list contains duplicate topics after normalization: "
                 f"'{lookup[normalized]}' and '{topic}'"
             )
         lookup.setdefault(normalized, topic)
@@ -115,7 +114,7 @@ def _load_topics_by_email(
                 # Merge unquoted commas back into the topics field.
                 extra = len(row) - expected_len
                 merged = ",".join(row[topics_index : topics_index + extra + 1])
-                row = row[:topics_index] + [merged] + row[topics_index + extra + 1 :]
+                row = [*row[:topics_index], merged, *row[topics_index + extra + 1 :]]
 
             if email_index is None:
                 continue
@@ -159,7 +158,7 @@ def assign_topics_for_period(period_path: Path) -> None:
     results_path = period_path / "results.json"
     responses_path = period_path / "responses.csv"
     members_path = period_path / "members.csv"
-    topics_path = period_path / "topics.json"
+    period_config_path = period_path / "period_config.json"
 
     if not responses_path.exists():
         raise FileNotFoundError(f"responses.csv not found: {responses_path}")
@@ -171,9 +170,9 @@ def assign_topics_for_period(period_path: Path) -> None:
     if not _responses_has_topics_column(responses_path):
         return
 
-    if not topics_path.exists():
-        raise FileNotFoundError(f"topics.json not found: {topics_path}")
-    valid_topics = _load_valid_topics(topics_path)
+    if not period_config_path.exists():
+        raise FileNotFoundError(f"period_config.json not found: {period_config_path}")
+    valid_topics = _load_valid_topics(period_config_path)
     topic_lookup = _build_topic_lookup(valid_topics)
     topics_by_email = _load_topics_by_email(responses_path, topic_lookup)
 
@@ -201,9 +200,7 @@ def assign_topics_for_period(period_path: Path) -> None:
             for topic in topics_by_email.get(email, set()):
                 score_map[topic] = score_map.get(topic, 0) + 1
 
-        positive_candidates = [
-            (topic, score) for topic, score in score_map.items() if score > 0
-        ]
+        positive_candidates = [(topic, score) for topic, score in score_map.items() if score > 0]
         if positive_candidates:
             positive_candidates.sort(key=lambda item: (-item[1], item[0]))
             candidates = positive_candidates[:TOP_K]
@@ -212,9 +209,7 @@ def assign_topics_for_period(period_path: Path) -> None:
 
         # Always include zero-score fallbacks to guarantee an assignment.
         candidate_topics = {topic for topic, _ in candidates}
-        fallback_topics = [
-            topic for topic in sorted(valid_topics) if topic not in candidate_topics
-        ]
+        fallback_topics = [topic for topic in sorted(valid_topics) if topic not in candidate_topics]
         candidates.extend((topic, 0) for topic in fallback_topics)
 
         if not candidates:
@@ -248,16 +243,13 @@ def assign_topics_for_period(period_path: Path) -> None:
 
         if position == len(ordered_events):
             assignment_tuple = tuple(assigned_topics.get(idx, "") for idx in tuple_order)
-            if (
-                current_total > best_total
-                or (
-                    current_total == best_total
-                    and (
-                        current_min > best_min_score
-                        or (
-                            current_min == best_min_score
-                            and (best_tuple is None or assignment_tuple < best_tuple)
-                        )
+            if current_total > best_total or (
+                current_total == best_total
+                and (
+                    current_min > best_min_score
+                    or (
+                        current_min == best_min_score
+                        and (best_tuple is None or assignment_tuple < best_tuple)
                     )
                 )
             ):

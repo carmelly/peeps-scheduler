@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from peeps_scheduler.validation.fields import EmailAddressStr, EventSpecList
 from peeps_scheduler.validation.file_schemas.attendance_json import (
@@ -64,6 +65,16 @@ class PeriodFileSchema(BaseModel):
     cancelled_events: EventSpecList = []
     cancelled_member_availability: list[CancelledAvailabilityJsonSchema] = []
     partnership_requests: list[PartnershipRequestJsonSchema] = []
+    topics: list[str] = []
+
+    @field_validator("topics", mode="before")
+    @classmethod
+    def validate_topics_list(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        raise ValueError("topics must be a list")
 
     @model_validator(mode="after")
     def validate_cross_file(self):
@@ -103,6 +114,8 @@ class PeriodFileSchema(BaseModel):
             self.cancelled_events,
             self.cancelled_member_availability,
         )
+        validate_topics(self.topics)
+        filter_response_topics(self.responses.responses, self.topics)
         validate_event_references(
             event_starts,
             self.results,
@@ -172,6 +185,57 @@ def validate_partnerships(
         if missing_emails:
             raise ValueError(f"target email not found: {sorted(set(missing_emails))}")
 
+
+def _normalize_topic(value: str) -> str:
+    return " ".join(re.sub(r"\([^)]*\)", "", value).split()).strip()
+
+
+def _topic_lookup(topics: list[str]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for topic in topics:
+        normalized = _normalize_topic(topic)
+        if normalized:
+            lookup.setdefault(normalized, topic)
+    return lookup
+
+
+def validate_topics(topics: list[str] | None) -> None:
+    """Ensure topics are non-empty strings with no normalized duplicates."""
+    if not topics:
+        return
+
+    normalized_lookup: dict[str, str] = {}
+    for topic in topics:
+        if not isinstance(topic, str):
+            raise ValueError("topics must be strings")
+        normalized = _normalize_topic(topic)
+        if not normalized:
+            raise ValueError("topics cannot be blank")
+        if normalized in normalized_lookup and normalized_lookup[normalized] != topic:
+            raise ValueError(
+                "topics contains duplicate entries after normalization: "
+                f"'{normalized_lookup[normalized]}' and '{topic}'"
+            )
+        normalized_lookup.setdefault(normalized, topic)
+
+
+def filter_response_topics(
+    responses: list, topics: list[str] | None
+) -> None:
+    """Filter response deep_dive_topics to only those in the period topic list."""
+    if not topics:
+        for response in responses:
+            response.deep_dive_topics = []
+        return
+
+    lookup = _topic_lookup(topics)
+    for response in responses:
+        filtered = []
+        for topic in response.deep_dive_topics:
+            normalized = _normalize_topic(topic)
+            if normalized in lookup:
+                filtered.append(lookup[normalized])
+        response.deep_dive_topics = filtered
 
 def validate_cancellations(
     event_starts: set,

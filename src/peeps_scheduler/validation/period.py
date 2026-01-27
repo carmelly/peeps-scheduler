@@ -32,6 +32,7 @@ class PeriodData:
     cancelled_events: list[Event] = ()
     cancelled_member_availability: list[CancelledMemberAvailability] = ()
     partnership_requests: list[PartnershipRequest] = ()
+    topics: list[str] = ()
 
 
 def load_and_validate_period(period_path: str, year: int) -> PeriodData:
@@ -83,7 +84,7 @@ def load_period_files(period_path: str) -> dict:
     member_rows = file_io.load_csv(str(members_file))
     response_rows = file_io.load_csv(str(responses_file))
 
-    # Load optional period_config.json (contains cancellations and partnerships)
+    # Load optional period_config.json (contains cancellations, partnerships, topics)
     period_config_data = {}
     if period_config_file.is_file():
         with period_config_file.open() as f:
@@ -100,6 +101,7 @@ def load_period_files(period_path: str) -> dict:
             "cancelled_member_availability", []
         ),
         "partnership_requests": period_config_data.get("partnership_requests", []),
+        "topics": period_config_data.get("topics", []),
     }
 
 
@@ -128,4 +130,5 @@ def to_period_data(period_schema: PeriodFileSchema, year: int) -> PeriodData:
         cancelled_events=cancelled_events,
         cancelled_member_availability=cancelled_availability,
         partnership_requests=partnership_requests,
+        topics=period_schema.topics,
     )

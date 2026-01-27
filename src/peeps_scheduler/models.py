@@ -90,6 +90,7 @@ class Peep:
         self.num_events = 0  # always start at 0, gets incremented during the run
         self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
         self.assigned_event_dates = []
+        self.topic_votes = kwargs.get("topic_votes") or []
         # keep these as strings, just to print back to updated members csv
         self.active = kwargs.get("active")
         self.date_joined = kwargs.get("date_joined")
@@ -703,7 +704,8 @@ class EventSequence:
                     "alternates": [
                         {"id": peep.id, "name": peep.name, "role": Role.LEADER.value}
                         for peep in event.alt_leaders
-                    ] + [
+                    ]
+                    + [
                         {"id": peep.id, "name": peep.name, "role": Role.FOLLOWER.value}
                         for peep in event.alt_followers
                     ],

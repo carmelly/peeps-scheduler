@@ -14,6 +14,7 @@ from peeps_scheduler.validation.file_schemas.period import (
     validate_partnerships,
     validate_response_emails,
     validate_roster_entries,
+    validate_topics,
 )
 from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.parsers import parse_event_name
@@ -132,6 +133,7 @@ class TestPeriodFileSchema:
         assert schema.cancelled_events == []
         assert schema.cancelled_member_availability == []
         assert schema.partnership_requests == []
+        assert schema.topics == []
 
     def test_response_email_not_found_raises(self, ctx):
         data = period_data(
@@ -148,6 +150,19 @@ class TestPeriodFileSchema:
             PeriodFileSchema.model_validate(data, context={"ctx": ctx})
 
         assert_error_for_model(e.value.errors(), "response email")
+
+    def test_valid_topics(self, ctx):
+        data = period_data(
+            {"topics": ["Balance for Spins and Turns", "Angles for Shaping & Slotting"]}
+        )
+        schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert schema.topics == ["Balance for Spins and Turns", "Angles for Shaping & Slotting"]
+
+    def test_topics_not_list_raises(self, ctx):
+        data = period_data({"topics": "Balance for Spins and Turns"})
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert_error_for_model(e.value.errors(), "topics")
 
     def test_results_roster_id_not_found_raises(self, ctx):
         data = period_data(
@@ -582,6 +597,69 @@ class TestValidatePartnerships:
         with pytest.raises(ValueError) as e:
             validate_partnerships(member_emails, partnerships)
         assert "duplicate requester email" in str(e.value)
+
+
+@pytest.mark.unit
+class TestValidateTopics:
+    """Unit tests for validate_topics function."""
+
+    def test_valid(self):
+        validate_topics(["Balance for Spins and Turns", "Angles for Shaping & Slotting"])
+
+    def test_none_or_empty(self):
+        validate_topics(None)
+        validate_topics([])
+
+    def test_blank_raises(self):
+        with pytest.raises(ValueError) as e:
+            validate_topics(["", "Balance for Spins and Turns"])
+        assert "topics cannot be blank" in str(e.value)
+
+    def test_non_string_raises(self):
+        with pytest.raises(ValueError) as e:
+            validate_topics(["Angles for Shaping & Slotting", 3])
+        assert "topics must be strings" in str(e.value)
+
+    def test_duplicate_after_normalization_raises(self):
+        with pytest.raises(ValueError) as e:
+            validate_topics(
+                [
+                    "Rhythm & Blues (swung timing, swung body action, rhythmic footwork)",
+                    "Rhythm & Blues",
+                ]
+            )
+        assert "duplicate entries after normalization" in str(e.value)
+
+
+@pytest.mark.unit
+class TestFilterResponseTopics:
+    """Unit tests for filter_response_topics function."""
+
+    def test_filters_to_matching_topics(self, ctx):
+        data = period_data(
+            {
+                "topics": ["Balance for Spins and Turns"],
+                "responses": {
+                    "responses": [
+                        response_data(
+                            {"Deep Dive Topics": ("Balance for Spins and Turns, Unknown Topic")}
+                        )
+                    ]
+                },
+            }
+        )
+        schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert schema.responses.responses[0].deep_dive_topics == ["Balance for Spins and Turns"]
+
+    def test_filters_to_empty_when_no_topics(self, ctx):
+        data = period_data(
+            {
+                "topics": [],
+                "responses": {"responses": [response_data({"Deep Dive Topics": "Unknown Topic"})]},
+            }
+        )
+        schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert schema.responses.responses[0].deep_dive_topics == []
 
 
 @pytest.mark.unit

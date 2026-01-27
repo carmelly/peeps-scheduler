@@ -41,6 +41,43 @@ class TestResponseCsvRowSchema:
         row = response_data({"Display Name": None})
         schema = ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
         assert schema.display_name is None
+        assert schema.deep_dive_topics == []
+
+    def test_deep_dive_topics_parses_list(self, ctx):
+        row = response_data(
+            {
+                "Deep Dive Topics": (
+                    "Balance for Spins and Turns, Angles for Shaping & Slotting"
+                )
+            }
+        )
+        schema = ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
+        assert schema.deep_dive_topics == [
+            "Balance for Spins and Turns",
+            "Angles for Shaping & Slotting",
+        ]
+
+    def test_deep_dive_topics_strips_parenthetical_commas(self, ctx):
+        row = response_data(
+            {
+                "Deep Dive Topics": (
+                    "Rhythm & Blues (swung timing, swung body action, rhythmic footwork)"
+                )
+            }
+        )
+        schema = ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
+        assert schema.deep_dive_topics == ["Rhythm & Blues"]
+
+    def test_deep_dive_topics_blank(self, ctx):
+        row = response_data({"Deep Dive Topics": ""})
+        schema = ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
+        assert schema.deep_dive_topics == []
+
+    def test_deep_dive_topics_invalid_type_raises(self, ctx):
+        row = response_data({"Deep Dive Topics": 123})
+        with pytest.raises(ValidationError) as e:
+            ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
+        assert_error_for_field(e.value.errors(), "Deep Dive Topics")
 
     @pytest.mark.parametrize(
         "timestamp, msg",
