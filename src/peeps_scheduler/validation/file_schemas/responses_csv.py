@@ -94,6 +94,9 @@ class ResponseCsvRowSchema(BaseModel):
     @classmethod
     def validate_consistent_format(cls, v: EventSpecList):
         """Availability strings must all either include duration or not"""
+        if not v:
+            # Empty availability is valid (member not available this period)
+            return v
         has_duration_list = [event.duration_minutes is not None for event in v]
         if len(set(has_duration_list)) != 1:
             raise ValueError("format must match in Availability: all events must use same format")

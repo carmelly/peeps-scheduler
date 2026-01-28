@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 import pytest
 from peeps_scheduler.scheduler import Scheduler
+from peeps_scheduler.validation import FileValidationError, load_and_validate_period
 
 
 class TestEndToEndWorkflows:
@@ -23,54 +24,27 @@ class TestEndToEndWorkflows:
         """Test complete end-to-end pipeline when no events can be scheduled."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test data with insufficient peeps (60-min events need 2 per role, we have 1 per role)
-            test_data = {
-                "events": [{"id": 0, "date": "2025-03-15 19:00", "duration_minutes": 60}],
-                "peeps": [
-                    {
-                        "id": 1,
-                        "full_name": "Alice",
-                        "display_name": "Alice",
-                        "email": "alice@test.com",
-                        "role": "Leader",
-                        "index": 0,
-                        "priority": 1,
-                        "total_attended": 0,
-                        "availability": [0],
-                        "event_limit": 1,
-                        "min_interval_days": 0,
-                        "switch_pref": 1,
-                        "responded": True,
-                    },
-                    {
-                        "id": 2,
-                        "full_name": "Bob",
-                        "display_name": "Bob",
-                        "email": "bob@test.com",
-                        "role": "Follower",
-                        "index": 1,
-                        "priority": 1,
-                        "total_attended": 0,
-                        "availability": [0],
-                        "event_limit": 1,
-                        "min_interval_days": 0,
-                        "switch_pref": 1,
-                        "responded": True,
-                    },
-                ],
-                "responses": [],
-            }
-
-            # Set up period directory structure (as scheduler.run() expects)
             period_path = Path(temp_dir) / "test_period"
             period_path.mkdir()
 
-            # Write input data to expected location
-            output_json = period_path / "output.json"
-            with output_json.open("w") as f:
-                json.dump(test_data, f)
+            members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
+1,Alice,Alice,alice@test.com,Leader,0,1,0,TRUE,1/1/2025
+2,Bob,Bob,bob@test.com,Follower,1,1,0,TRUE,1/1/2025"""
 
-            # Run complete scheduler workflow
-            scheduler = Scheduler(data_folder=str(period_path), max_events=1, interactive=False)
+            responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days
+2/1/2025 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,1,"Saturday March 15 - 7pm to 8pm",0
+2/1/2025 10:00:00,bob@test.com,Bob,Follower,I only want to be scheduled in my primary role,1,"Saturday March 15 - 7pm to 8pm",0"""
+
+            (period_path / "members.csv").write_text(members_csv_content)
+            (period_path / "responses.csv").write_text(responses_csv_content)
+
+            period_data = load_and_validate_period(str(period_path), 2025)
+            scheduler = Scheduler(
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=1,
+                interactive=False,
+            )
             result = scheduler.run()
 
             # Verify scheduler handled impossible scenario gracefully
@@ -90,60 +64,29 @@ class TestEndToEndWorkflows:
         """Test complete end-to-end pipeline with extremely impossible attendance constraints."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create scenario with 120-min event (needs 6 per role) but only 1 of each role
-            test_data = {
-                "events": [
-                    {
-                        "id": 1,
-                        "date": "2025-03-15 19:00",
-                        "duration_minutes": 120,
-                    }  # Needs 6 leaders + 6 followers
-                ],
-                "peeps": [
-                    {
-                        "id": 1,
-                        "full_name": "OnlyLeader",
-                        "display_name": "OnlyLeader",
-                        "email": "leader@test.com",
-                        "role": "Leader",
-                        "index": 0,
-                        "priority": 1,
-                        "total_attended": 0,
-                        "availability": [1],
-                        "event_limit": 1,
-                        "min_interval_days": 0,
-                        "switch_pref": 1,
-                        "responded": True,
-                    },
-                    {
-                        "id": 2,
-                        "full_name": "OnlyFollower",
-                        "display_name": "OnlyFollower",
-                        "email": "follower@test.com",
-                        "role": "Follower",
-                        "index": 1,
-                        "priority": 1,
-                        "total_attended": 0,
-                        "availability": [1],
-                        "event_limit": 1,
-                        "min_interval_days": 0,
-                        "switch_pref": 1,
-                        "responded": True,
-                    },
-                ],
-                "responses": [],
-            }
-
             # Set up period directory structure
             period_path = Path(temp_dir) / "test_period"
             period_path.mkdir()
 
-            # Write input data
-            output_json = period_path / "output.json"
-            with output_json.open("w") as f:
-                json.dump(test_data, f)
+            members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
+1,OnlyLeader,OnlyLeader,leader@test.com,Leader,0,1,0,TRUE,1/1/2025
+2,OnlyFollower,OnlyFollower,follower@test.com,Follower,1,1,0,TRUE,1/1/2025"""
+
+            responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days
+2/1/2025 10:00:00,leader@test.com,OnlyLeader,Leader,I only want to be scheduled in my primary role,1,"Saturday March 15 - 7pm to 9pm",0
+2/1/2025 10:00:00,follower@test.com,OnlyFollower,Follower,I only want to be scheduled in my primary role,1,"Saturday March 15 - 7pm to 9pm",0"""
+
+            (period_path / "members.csv").write_text(members_csv_content)
+            (period_path / "responses.csv").write_text(responses_csv_content)
 
             # Run complete scheduler workflow
-            scheduler = Scheduler(data_folder=str(period_path), max_events=1, interactive=False)
+            period_data = load_and_validate_period(str(period_path), 2025)
+            scheduler = Scheduler(
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=1,
+                interactive=False,
+            )
             result = scheduler.run()
 
             # Verify scheduler handled extremely impossible scenario gracefully
@@ -190,47 +133,32 @@ class TestEndToEndWorkflows:
             shutil.copy(golden_master_dir / "responses.csv", responses_csv)
             shutil.copy(golden_master_dir / "members.csv", members_csv)
 
-            # Step 2: Run scheduler with load_from_csv=True for full integration test
-            # This tests CSV parsing, JSON conversion, and scheduling in one workflow
+            period_data = load_and_validate_period(str(period_path), 2025)
             scheduler = Scheduler(
-                data_folder=str(period_path), max_events=10, interactive=False, year=2025
+                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
             )
-            result = scheduler.run(load_from_csv=True)
+            result = scheduler.run()
 
             # Verify scheduler succeeded (should not return None)
             assert result is not None, "Scheduler should succeed with valid historical data"
 
-            # Verify generated files match golden master exactly
-            output_json = period_path / "output.json"
             result_json = period_path / "results.json"
 
-            print(output_json)
             print(result_json)
 
-            assert output_json.exists(), "output.json should be created during CSV conversion"
             assert result_json.exists(), "results.json should be created for successful scheduling"
-
-            # Load expected and actual files for comparison
-            with (golden_master_dir / "output.json").open() as f:
-                expected_output = json.load(f)
-            with output_json.open() as f:
-                actual_output = json.load(f)
 
             with (golden_master_dir / "results.json").open() as f:
                 expected_results = json.load(f)
             with result_json.open() as f:
                 actual_results = json.load(f)
 
-            # File-based integration test: generated files should match golden master exactly
-            assert actual_output == expected_output, (
-                "Generated output.json should match golden master"
-            )
             assert actual_results == expected_results, (
                 "Generated results.json should match golden master"
             )
 
             print(
-                "Golden master integration test passed: CSV -> JSON -> Scheduler pipeline produces identical results"
+                "Golden master integration test passed: validation -> Scheduler pipeline produces identical results"
             )
 
 
@@ -243,15 +171,15 @@ class TestCancellationsWorkflow:
     """
 
     def test_scheduler_raises_error_for_unknown_cancelled_event(self):
-        """Test that scheduler raises error when cancellations.json specifies non-existent event.
+        """Test that validation raises error when period_config specifies non-existent event.
 
         Configuration error: user mistakenly specified an event that doesn't exist in responses.
 
         Scenario:
         - Create 2 events: "Saturday March 1 - 5pm" and "Sunday March 2 - 5pm"
-        - Create cancellations.json cancelling non-existent: "Friday March 7 - 5pm"
-        - Run scheduler
-        - Assert: Raises ValueError about cancelled event not found
+        - Create period_config.json cancelling non-existent: "Friday March 7 - 5pm"
+        - Validate period
+        - Assert: Raises FileValidationError about cancelled event not found
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             period_path = Path(temp_dir) / "test_period"
@@ -259,14 +187,14 @@ class TestCancellationsWorkflow:
 
             # Members.csv: minimal (4 leaders + 4 followers for two 60-min events)
             members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
-1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,2025-01-01
-5,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,2025-01-01
-2,Bob Leader,Bob,bob@test.com,Leader,2,3,0,TRUE,2025-01-01
-6,Fiona Follower,Fiona,fiona@test.com,Follower,3,3,0,TRUE,2025-01-01
-3,Charlie Leader,Charlie,charlie@test.com,Leader,4,2,0,TRUE,2025-01-01
-7,Grace Follower,Grace,grace@test.com,Follower,5,2,0,TRUE,2025-01-01
-4,David Leader,David,david@test.com,Leader,6,1,0,TRUE,2025-01-01
-8,Hannah Follower,Hannah,hannah@test.com,Follower,7,1,0,TRUE,2025-01-01"""
+1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,1/1/2025
+5,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,1/1/2025
+2,Bob Leader,Bob,bob@test.com,Leader,2,3,0,TRUE,1/1/2025
+6,Fiona Follower,Fiona,fiona@test.com,Follower,3,3,0,TRUE,1/1/2025
+3,Charlie Leader,Charlie,charlie@test.com,Leader,4,2,0,TRUE,1/1/2025
+7,Grace Follower,Grace,grace@test.com,Follower,5,2,0,TRUE,1/1/2025
+4,David Leader,David,david@test.com,Leader,6,1,0,TRUE,1/1/2025
+8,Hannah Follower,Hannah,hannah@test.com,Follower,7,1,0,TRUE,1/1/2025"""
 
             members_path = period_path / "members.csv"
             members_path.write_text(members_csv_content)
@@ -275,44 +203,42 @@ class TestCancellationsWorkflow:
             responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
 ,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
 ,,Event: Sunday March 2 - 5pm,,,,,60,,,,,
-2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
+2/1/2025 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
 
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # Create cancellations.json with a NON-EXISTENT event
-            cancelled_events_content = {
+            # Create period_config.json with a NON-EXISTENT event
+            period_config_content = {
                 "cancelled_events": [
                     "Friday March 7 - 5pm to 6pm"  # Doesn't exist in responses
                 ],
-                "cancelled_availability": [],
+                "cancelled_member_availability": [],
                 "notes": "User mistakenly cancelled non-existent event",
             }
-            cancelled_path = period_path / "cancellations.json"
-            with cancelled_path.open("w") as f:
-                json.dump(cancelled_events_content, f)
+            period_config_path = period_path / "period_config.json"
+            with period_config_path.open("w") as f:
+                json.dump(period_config_content, f)
 
-            # Run scheduler should raise error
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-
-            with pytest.raises(ValueError, match=r"cancelled event.*not found|unknown.*cancelled"):
-                scheduler.run(load_from_csv=True)
+            with pytest.raises(
+                FileValidationError, match=r"cancelled event.*not found|unknown.*cancelled"
+            ):
+                load_and_validate_period(str(period_path), 2025)
 
     def test_scheduler_skips_cancelled_events(self):
-        """Test that cancelled events are filtered from results but preserved in output.json.
+        """Test that cancelled events are filtered from results.
 
         Scenario:
         - Create 2 events (60-min each, require 2 leaders + 2 followers)
         - Cancel 1 event via cancellations.json
         - Run scheduler
-        - Assert: output.json contains both events (preserved)
         - Assert: results.json contains only 1 event (cancelled filtered)
         - Assert: No peeps scheduled for cancelled event in results.json
         """
@@ -326,14 +252,14 @@ class TestCancellationsWorkflow:
 
             # Members.csv: 4 leaders + 4 followers (enough for both events), sorted by priority descending
             members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
-1,Alice Leader,Alice,alice@test.com,Leader,0,10,0,TRUE,2025-01-01
-5,Eve Follower,Eve,eve@test.com,Follower,1,9,0,TRUE,2025-01-01
-2,Bob Leader,Bob,bob@test.com,Leader,2,8,0,TRUE,2025-01-01
-6,Fiona Follower,Fiona,fiona@test.com,Follower,3,7,0,TRUE,2025-01-01
-3,Charlie Leader,Charlie,charlie@test.com,Leader,4,6,0,TRUE,2025-01-01
-7,Grace Follower,Grace,grace@test.com,Follower,5,5,0,TRUE,2025-01-01
-4,David Leader,David,david@test.com,Leader,6,4,0,TRUE,2025-01-01
-8,Hannah Follower,Hannah,hannah@test.com,Follower,7,3,0,TRUE,2025-01-01"""
+1,Alice Leader,Alice,alice@test.com,Leader,0,10,0,TRUE,1/1/2025
+5,Eve Follower,Eve,eve@test.com,Follower,1,9,0,TRUE,1/1/2025
+2,Bob Leader,Bob,bob@test.com,Leader,2,8,0,TRUE,1/1/2025
+6,Fiona Follower,Fiona,fiona@test.com,Follower,3,7,0,TRUE,1/1/2025
+3,Charlie Leader,Charlie,charlie@test.com,Leader,4,6,0,TRUE,1/1/2025
+7,Grace Follower,Grace,grace@test.com,Follower,5,5,0,TRUE,1/1/2025
+4,David Leader,David,david@test.com,Leader,6,4,0,TRUE,1/1/2025
+8,Hannah Follower,Hannah,hannah@test.com,Follower,7,3,0,TRUE,1/1/2025"""
 
             members_path = period_path / "members.csv"
             members_path.write_text(members_csv_content)
@@ -342,52 +268,38 @@ class TestCancellationsWorkflow:
             responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
 ,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
 ,,Event: Sunday March 2 - 5pm,,,,,60,,,,,
-2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
+2/1/2025 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
 
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # Create cancellations.json with one event cancelled
-            cancelled_events_content = {
+            # Create period_config.json with one event cancelled
+            period_config_content = {
                 "cancelled_events": ["Sunday March 2 - 5pm"],
-                "cancelled_availability": [],
+                "cancelled_member_availability": [],
                 "notes": "Instructor unavailable - notified members on 2025-02-15",
             }
-            cancelled_path = period_path / "cancellations.json"
-            with cancelled_path.open("w") as f:
-                json.dump(cancelled_events_content, f)
+            period_config_path = period_path / "period_config.json"
+            with period_config_path.open("w") as f:
+                json.dump(period_config_content, f)
 
-            # Run scheduler
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-            result = scheduler.run(load_from_csv=True)
+            period_data = load_and_validate_period(str(period_path), 2025)
+            scheduler = Scheduler(
+                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+            )
+            result = scheduler.run()
 
             # Verify scheduler succeeded
             assert result is not None, (
                 "Scheduler should succeed with valid data and valid cancelled events"
             )
-
-            # Verify output.json exists and contains BOTH events
-            output_json = period_path / "output.json"
-            assert output_json.exists(), "output.json should be created"
-
-            with output_json.open() as f:
-                output_data = json.load(f)
-
-            output_events = output_data.get("events", [])
-            assert len(output_events) == 2, (
-                f"output.json should preserve both events, got {len(output_events)}"
-            )
-
-            # Events are stored by date format in output.json
-            event_dates = [e.get("date") for e in output_events]
-            assert len(event_dates) == 2, f"Should have 2 events, got {len(event_dates)}"
 
             # Verify results.json exists and contains ONLY 1 event (cancelled filtered)
             results_json = period_path / "results.json"
@@ -409,7 +321,7 @@ class TestCancellationsWorkflow:
 
         Scenario:
         - Create 2 events
-        - NO cancellations.json file
+        - NO period_config.json file
         - Run scheduler
         - Assert: Scheduler succeeds (backward compatible)
         - Assert: Both events are scheduled normally
@@ -420,14 +332,14 @@ class TestCancellationsWorkflow:
 
             # Members.csv: 4 leaders + 4 followers, sorted by priority (highest to lowest)
             members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
-1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,2025-01-01
-5,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,2025-01-01
-2,Bob Leader,Bob,bob@test.com,Leader,2,3,0,TRUE,2025-01-01
-6,Fiona Follower,Fiona,fiona@test.com,Follower,3,3,0,TRUE,2025-01-01
-3,Charlie Leader,Charlie,charlie@test.com,Leader,4,2,0,TRUE,2025-01-01
-7,Grace Follower,Grace,grace@test.com,Follower,5,2,0,TRUE,2025-01-01
-4,David Leader,David,david@test.com,Leader,6,1,0,TRUE,2025-01-01
-8,Hannah Follower,Hannah,hannah@test.com,Follower,7,1,0,TRUE,2025-01-01"""
+1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,1/1/2025
+5,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,1/1/2025
+2,Bob Leader,Bob,bob@test.com,Leader,2,3,0,TRUE,1/1/2025
+6,Fiona Follower,Fiona,fiona@test.com,Follower,3,3,0,TRUE,1/1/2025
+3,Charlie Leader,Charlie,charlie@test.com,Leader,4,2,0,TRUE,1/1/2025
+7,Grace Follower,Grace,grace@test.com,Follower,5,2,0,TRUE,1/1/2025
+4,David Leader,David,david@test.com,Leader,6,1,0,TRUE,1/1/2025
+8,Hannah Follower,Hannah,hannah@test.com,Follower,7,1,0,TRUE,1/1/2025"""
 
             members_path = period_path / "members.csv"
             members_path.write_text(members_csv_content)
@@ -436,23 +348,25 @@ class TestCancellationsWorkflow:
             responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
 ,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
 ,,Event: Sunday March 2 - 5pm,,,,,60,,,,,
-2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
-2025-02-01 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
+2/1/2025 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,charlie@test.com,Charlie,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,david@test.com,David,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,fiona@test.com,Fiona,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,grace@test.com,Grace,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,
+2/1/2025 10:00:00,hannah@test.com,Hannah,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0,,,"""
 
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # DO NOT create cancellations.json
+            # DO NOT create period_config.json
 
-            # Run scheduler
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-            result = scheduler.run(load_from_csv=True)
+            period_data = load_and_validate_period(str(period_path), 2025)
+            scheduler = Scheduler(
+                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+            )
+            result = scheduler.run()
 
             # Verify scheduler succeeded
             assert result is not None, "Scheduler should succeed without cancellations.json"
@@ -482,15 +396,15 @@ class TestCancellationsWorkflow:
 
             # Members.csv: 5 leaders + 4 followers (enough to pass ABS_MIN_ROLE after cancellation)
             members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
-1,Alex Leader,Alex,alex@test.com,Leader,0,10,0,TRUE,2025-01-01
-2,Bob Leader,Bob,bob@test.com,Leader,1,9,0,TRUE,2025-01-01
-3,Casey Leader,Casey,casey@test.com,Leader,2,8,0,TRUE,2025-01-01
-4,Drew Leader,Drew,drew@test.com,Leader,3,7,0,TRUE,2025-01-01
-5,Eli Leader,Eli,eli@test.com,Leader,4,6,0,TRUE,2025-01-01
-6,Dana Follower,Dana,dana@test.com,Follower,5,5,0,TRUE,2025-01-01
-7,Eve Follower,Eve,eve@test.com,Follower,6,4,0,TRUE,2025-01-01
-8,Fran Follower,Fran,fran@test.com,Follower,7,3,0,TRUE,2025-01-01
-9,Gia Follower,Gia,gia@test.com,Follower,8,2,0,TRUE,2025-01-01"""
+1,Alex Leader,Alex,alex@test.com,Leader,0,10,0,TRUE,1/1/2025
+2,Bob Leader,Bob,bob@test.com,Leader,1,9,0,TRUE,1/1/2025
+3,Casey Leader,Casey,casey@test.com,Leader,2,8,0,TRUE,1/1/2025
+4,Drew Leader,Drew,drew@test.com,Leader,3,7,0,TRUE,1/1/2025
+5,Eli Leader,Eli,eli@test.com,Leader,4,6,0,TRUE,1/1/2025
+6,Dana Follower,Dana,dana@test.com,Follower,5,5,0,TRUE,1/1/2025
+7,Eve Follower,Eve,eve@test.com,Follower,6,4,0,TRUE,1/1/2025
+8,Fran Follower,Fran,fran@test.com,Follower,7,3,0,TRUE,1/1/2025
+9,Gia Follower,Gia,gia@test.com,Follower,8,2,0,TRUE,1/1/2025"""
 
             members_path = period_path / "members.csv"
             members_path.write_text(members_csv_content)
@@ -498,32 +412,35 @@ class TestCancellationsWorkflow:
             # Responses.csv: one event, all members available
             responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
 ,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
-2025-02-01 10:00:00,alex@test.com,Alex,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,casey@test.com,Casey,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,drew@test.com,Drew,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,eli@test.com,Eli,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,dana@test.com,Dana,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,fran@test.com,Fran,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,gia@test.com,Gia,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
+2/1/2025 10:00:00,alex@test.com,Alex,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,casey@test.com,Casey,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,drew@test.com,Drew,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,eli@test.com,Eli,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,dana@test.com,Dana,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,fran@test.com,Fran,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,gia@test.com,Gia,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
 
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            cancellations_content = {
+            period_config_content = {
                 "cancelled_events": [],
-                "cancelled_availability": [
-                    {"email": "alex@test.com", "events": ["Saturday March 1 - 5pm"]}
+                "cancelled_member_availability": [
+                    {"member_email": "alex@test.com", "events": ["Saturday March 1 - 5pm"]}
                 ],
                 "notes": "Alex is no longer available",
             }
-            cancelled_path = period_path / "cancellations.json"
-            with cancelled_path.open("w") as f:
-                json.dump(cancellations_content, f)
+            period_config_path = period_path / "period_config.json"
+            with period_config_path.open("w") as f:
+                json.dump(period_config_content, f)
 
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-            result = scheduler.run(load_from_csv=True)
+            period_data = load_and_validate_period(str(period_path), 2025)
+            scheduler = Scheduler(
+                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+            )
+            result = scheduler.run()
 
             assert result is not None, "Scheduler should succeed with cancelled availability"
 
@@ -537,36 +454,35 @@ class TestCancellationsWorkflow:
             assert 1 not in assigned_ids, "Cancelled leader should not be scheduled"
 
     def test_scheduler_raises_error_for_cancelled_availability_unknown_email(self):
-        """Test that cancellations.json fails for unknown email in cancelled availability."""
+        """Test that period_config.json fails for unknown email in cancelled availability."""
         with tempfile.TemporaryDirectory() as temp_dir:
             period_path = Path(temp_dir) / "test_period"
             period_path.mkdir()
 
             members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
-1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,2025-01-01
-2,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,2025-01-01"""
+1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,1/1/2025
+2,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,1/1/2025"""
 
             members_path = period_path / "members.csv"
             members_path.write_text(members_csv_content)
 
             responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
 ,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
-2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
-2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
+2/1/2025 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2/1/2025 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
 
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            cancellations_content = {
+            period_config_content = {
                 "cancelled_events": [],
-                "cancelled_availability": [
-                    {"email": "unknown@test.com", "events": ["Saturday March 1 - 5pm"]}
+                "cancelled_member_availability": [
+                    {"member_email": "unknown@test.com", "events": ["Saturday March 1 - 5pm"]}
                 ],
             }
-            cancelled_path = period_path / "cancellations.json"
-            with cancelled_path.open("w") as f:
-                json.dump(cancellations_content, f)
+            period_config_path = period_path / "period_config.json"
+            with period_config_path.open("w") as f:
+                json.dump(period_config_content, f)
 
-            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
-            with pytest.raises(ValueError, match=r"unknown email|cancelled availability"):
-                scheduler.run(load_from_csv=True)
+            with pytest.raises(FileValidationError, match=r"unknown email|cancelled availability"):
+                load_and_validate_period(str(period_path), 2025)

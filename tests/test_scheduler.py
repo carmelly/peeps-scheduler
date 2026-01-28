@@ -9,13 +9,25 @@ Following testing philosophy:
 """
 
 import peeps_scheduler.constants as constants
-from peeps_scheduler.models import EventSequence, Role, SwitchPreference
+from peeps_scheduler.models import EventSequence, PartnershipRequest, Role, SwitchPreference
 from peeps_scheduler.scheduler import Scheduler
+from peeps_scheduler.validation.period import PeriodData
 
 
 def create_scheduler(**kwargs):
     """Factory for creating test schedulers."""
-    defaults = {"data_folder": "test", "max_events": 3}
+    period_data = kwargs.pop(
+        "period_data",
+        PeriodData(
+            peeps=[],
+            events=[],
+            cancelled_events=[],
+            cancelled_member_availability=[],
+            partnership_requests=[],
+            topics=[],
+        ),
+    )
+    defaults = {"data_folder": "test", "max_events": 3, "period_data": period_data}
     defaults.update(kwargs)
     return Scheduler(**defaults)
 
@@ -25,18 +37,39 @@ class TestSchedulerInitialization:
 
     def test_scheduler_initialization_with_defaults(self):
         """Test that Scheduler initializes with provided parameters."""
-        scheduler = Scheduler(data_folder="test_data", max_events=5)
+        scheduler = Scheduler(
+            period_data=PeriodData(
+                peeps=[],
+                events=[],
+                cancelled_events=[],
+                cancelled_member_availability=[],
+                partnership_requests=[],
+                topics=[],
+            ),
+            data_folder="test_data",
+            max_events=5,
+        )
 
         assert scheduler.data_folder == "test_data"
         assert scheduler.max_events == 5
         assert scheduler.target_max is None  # Should start as None
 
     def test_scheduler_sets_output_paths_correctly(self):
-        """Test that Scheduler sets correct file paths based on data folder."""
-        scheduler = Scheduler(data_folder="my_folder", max_events=3)
+        """Test that Scheduler sets correct result paths based on data folder."""
+        scheduler = Scheduler(
+            period_data=PeriodData(
+                peeps=[],
+                events=[],
+                cancelled_events=[],
+                cancelled_member_availability=[],
+                partnership_requests=[],
+                topics=[],
+            ),
+            data_folder="my_folder",
+            max_events=3,
+        )
 
         # The paths use the new data manager format
-        assert scheduler.output_json.endswith("my_folder/output.json")
         assert scheduler.result_json.endswith("my_folder/results.json")
 
 
@@ -624,7 +657,11 @@ class TestSchedulerSequenceSelection:
         sequences = [seq_b, seq_a]  # Put B first to test ordering
 
         # Define partnership requests: 1<->2 mutual, 3->4 one-sided
-        scheduler.partnership_requests = {1: {2}, 2: {1}, 3: {4}}
+        scheduler.partnership_requests = [
+            PartnershipRequest(requester=peep1, target_peeps=[peep2]),
+            PartnershipRequest(requester=peep2, target_peeps=[peep1]),
+            PartnershipRequest(requester=peep3, target_peeps=[peep4]),
+        ]
 
         top = scheduler.get_top_sequences(sequences)
 

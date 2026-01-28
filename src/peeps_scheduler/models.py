@@ -1,5 +1,4 @@
 import datetime
-import itertools
 import logging
 import random
 from dataclasses import dataclass
@@ -147,9 +146,12 @@ class Peep:
             "date_joined": self.date_joined,
         }
         if self.responded:
+            availability = [
+                event.id if isinstance(event, Event) else event for event in self.availability
+            ]
             peep_dict.update(
                 {
-                    "availability": self.availability,
+                    "availability": availability,
                     "switch_pref": self.switch_pref.value,
                     "responded": self.responded,
                     "event_limit": self.event_limit,
@@ -162,7 +164,7 @@ class Peep:
         """Checks if a peep can attend an event based on peep availability, event limit, and interval.
         Does not take into account role limit, so that we can add this peep as an alternate if needed"""
         # meets the person's availability
-        if event.id not in self.availability:
+        if event not in self.availability:
             return False
 
         # personal limit for the month
@@ -256,7 +258,7 @@ class Peep:
 
 class Event:
     def __init__(self, **kwargs):
-        self.id = kwargs.get("id", 0)
+        self._id = kwargs.get("id", 0)
         self.date = kwargs.get("date")  # TODO: validate that this is a datetime
 
         self.duration_minutes = kwargs.get("duration_minutes") or constants.DEFAULT_EVENT_DURATION
@@ -269,6 +271,22 @@ class Event:
         self._alt_leaders = []
         self._alt_followers = []
         self._attendee_order = []  # keep track of assignment order
+
+    @property
+    def id(self):
+        return self._id
+
+    @id.setter
+    def id(self, _value):
+        raise AttributeError("event id is immutable")
+
+    def __eq__(self, other):
+        if isinstance(other, Event):
+            return self.id == other.id
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.id)
 
     @property
     def config(self):
@@ -771,35 +789,34 @@ class EventSequence:
         if not partnership_requests:
             return
 
-        mutual_pairs = set()
-        one_sided_requests = set()
-
-        for requester_id, partner_ids in partnership_requests.items():
-            for partner_id in partner_ids:
-                if (
-                    partner_id in partnership_requests
-                    and requester_id in partnership_requests[partner_id]
-                ):
-                    pair = tuple(sorted((requester_id, partner_id)))
-                    mutual_pairs.add(pair)
-                else:
-                    one_sided_requests.add((requester_id, partner_id))
+        # Flatten requests into (requester_id, target_id) pairs for fast membership checks.
+        requested_pairs = {
+            (request.requester.id, target.id)
+            for request in partnership_requests
+            for target in request.target_peeps
+        }
+        # Mutual pairs exist when both directions were requested (A->B and B->A).
+        mutual_pairs = {
+            tuple(sorted(pair)) for pair in requested_pairs if (pair[1], pair[0]) in requested_pairs
+        }
+        # One-sided requests are pairs with no corresponding reverse request.
+        one_sided_requests = {
+            pair for pair in requested_pairs if (pair[1], pair[0]) not in requested_pairs
+        }
 
         mutual_occurrences = {}
         one_sided_satisfied = set()
 
+        # Scan each scheduled event to count fulfilled mutual pairs and satisfied one-sided requests.
         for event in self.valid_events:
             attendee_ids = {peep.id for peep in event.attendees}
             if not attendee_ids:
                 continue
 
             if mutual_pairs:
-                for pair in itertools.combinations(attendee_ids, 2):
-                    normalized_pair = tuple(sorted(pair))
-                    if normalized_pair in mutual_pairs:
-                        mutual_occurrences[normalized_pair] = (
-                            mutual_occurrences.get(normalized_pair, 0) + 1
-                        )
+                for pair in mutual_pairs:
+                    if pair[0] in attendee_ids and pair[1] in attendee_ids:
+                        mutual_occurrences[pair] = mutual_occurrences.get(pair, 0) + 1
 
             if one_sided_requests:
                 for requester_id, partner_id in one_sided_requests:
@@ -807,9 +824,12 @@ class EventSequence:
                         one_sided_satisfied.add((requester_id, partner_id))
 
         self.mutual_unique_fulfilled = len(mutual_occurrences)
-        self.mutual_repeat_fulfilled = sum(
-            count - 1 for count in mutual_occurrences.values() if count > 1
-        )
+        # Each extra occurrence beyond the first counts as a repeat.
+        repeat_fulfilled = 0
+        for count in mutual_occurrences.values():
+            if count > 1:
+                repeat_fulfilled += count - 1
+        self.mutual_repeat_fulfilled = repeat_fulfilled
         self.one_sided_fulfilled = len(one_sided_satisfied)
         self.partnerships_fulfilled = self.mutual_unique_fulfilled + self.one_sided_fulfilled
 

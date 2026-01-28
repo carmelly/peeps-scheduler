@@ -8,7 +8,7 @@ Following testing philosophy:
 - Skip complex scheduling integration scenarios
 """
 
-from peeps_scheduler.models import EventSequence, Role
+from peeps_scheduler.models import EventSequence, PartnershipRequest, Role
 
 
 class TestEventSequenceInitialization:
@@ -576,7 +576,10 @@ class TestEventSequencePartnerships:
         sequence = EventSequence([event1, event2, event3], [peep1, peep2, peep3])
         sequence.valid_events = [event1, event2, event3]
 
-        partnership_requests = {1: {2, 3}, 2: {1}}
+        partnership_requests = [
+            PartnershipRequest(requester=peep1, target_peeps=[peep2, peep3]),
+            PartnershipRequest(requester=peep2, target_peeps=[peep1]),
+        ]
 
         sequence.calculate_partnerships_fulfilled(partnership_requests)
 

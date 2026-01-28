@@ -5,37 +5,32 @@ import peeps_scheduler.constants as constants
 from peeps_scheduler import file_io, utils
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
+from peeps_scheduler.validation.period import PeriodData
 
 
 class Scheduler:
     def __init__(
         self,
+        period_data: PeriodData,
         data_folder,
         max_events,
         interactive=True,
         sequence_choice=0,
-        cancellations_file="cancellations.json",
-        partnerships_file="partnerships.json",
-        year=None,
     ):
+        self.period_data = period_data
         self.data_folder = data_folder
         self.max_events = max_events
         self.interactive = interactive
         self.sequence_choice = (
             sequence_choice  # Which tied sequence to auto-select in non-interactive mode
         )
-        self.cancellations_file = cancellations_file
-        self.partnerships_file = partnerships_file
         self.data_manager = get_data_manager()
-        self.partnership_requests = {}
-        self.year = year
+        self.partnership_requests = period_data.partnership_requests
 
         # Ensure period directory exists
         self.period_path = self.data_manager.ensure_period_exists(data_folder)
-        self.output_json = (self.period_path / "output.json").as_posix()
         self.result_json = (self.period_path / "results.json").as_posix()
         self.target_max = None  # max per role used for each run
-
 
     def sanitize_events(self, events, peeps):
         """Sanitize events to ensure there are enough leaders and followers to fill roles."""
@@ -43,10 +38,10 @@ class Scheduler:
         removed_events = []
         for event in events:
             num_leaders = sum(
-                1 for peep in peeps if event.id in peep.availability and peep.role == Role.LEADER
+                1 for peep in peeps if event in peep.availability and peep.role == Role.LEADER
             )
             num_followers = sum(
-                1 for peep in peeps if event.id in peep.availability and peep.role == Role.FOLLOWER
+                1 for peep in peeps if event in peep.availability and peep.role == Role.FOLLOWER
             )
 
             if num_leaders >= constants.ABS_MIN_ROLE and num_followers >= constants.ABS_MIN_ROLE:
@@ -196,8 +191,8 @@ class Scheduler:
                     shared_peeps = sum(
                         1
                         for peep in peeps
-                        if event_a.id in peep_event_map[peep.id]
-                        and event_b.id in peep_event_map[peep.id]
+                        if event_a in peep_event_map[peep.id]
+                        and event_b in peep_event_map[peep.id]
                     )
 
                     overlap_scores[event_a.id] += shared_peeps
@@ -223,7 +218,7 @@ class Scheduler:
 
             # Use weight as a tiebreaker
             event_weights = {
-                event: sum(peep.priority for peep in peeps if event.id in peep.availability)
+                event: sum(peep.priority for peep in peeps if event in peep.availability)
                 for event in candidates
             }
             event_to_remove = min(event_weights, key=event_weights.get)
@@ -281,119 +276,24 @@ class Scheduler:
             and s.one_sided_fulfilled == best_one_sided
         ]
 
-    def run(self, generate_test_data=False, load_from_csv=False):
-        # Extract year from data_folder for cancellations parsing
-        # (e.g., "2026-01" -> 2026) - handle both absolute paths and folder names
-        from pathlib import Path
+    def run(self):
+        peeps = list(self.period_data.peeps)
+        events = list(self.period_data.events)
+        cancelled_events = list(self.period_data.cancelled_events)
+        cancelled_availability = list(self.period_data.cancelled_member_availability)
 
-        folder_name = Path(self.data_folder).name
-        year = self.year
-        if year is None:
-            try:
-                year = (
-                    int(folder_name[:4])
-                    if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit()
-                    else None
-                )
-            except (ValueError, TypeError):
-                year = None
-
-        if generate_test_data:
-            logging.info(f"Generating test data and saving to {self.output_json}")
-            utils.generate_test_data(5, 30, self.output_json)
-        elif load_from_csv:
-            responses_csv = (self.period_path / "responses.csv").as_posix()
-            peeps_csv = (self.period_path / "members.csv").as_posix()
-            logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
-            file_io.convert_to_json(
-                str(responses_csv), str(peeps_csv), str(self.output_json), year=year
-            )
-
-        logging.info(f"Loading data from {self.output_json}")
-
-        peeps, events = file_io.load_data_from_json(str(self.output_json))
-        self.partnership_requests = file_io.load_partnerships(
-            str(self.period_path),
-            partnerships_filename=self.partnerships_file,
-            valid_peep_ids={peep.id for peep in peeps},
-        )
-        if self.partnership_requests:
-            total_requests = sum(len(partners) for partners in self.partnership_requests.values())
-            logging.info(f"Loaded {total_requests} partnership request(s)")
-
-        date_string_to_event_id = {e.date.strftime("%Y-%m-%d %H:%M"): e.id for e in events}
-        event_id_to_date_string = {e.id: e.date.strftime("%Y-%m-%d %H:%M") for e in events}
-
-        cancellations_path = self.period_path / self.cancellations_file
-        cancelled_event_ids, cancelled_availability = file_io.load_cancellations(
-            str(cancellations_path), year=year
-        )
-
-        if cancelled_event_ids:
-            loaded_event_ids = set(date_string_to_event_id.keys())
-            unknown_cancelled = cancelled_event_ids - loaded_event_ids
-            if unknown_cancelled:
-                event_word = "event" if len(unknown_cancelled) == 1 else "events"
-                raise ValueError(
-                    f"cancelled {event_word} not found in loaded events: {sorted(unknown_cancelled)}"
-                )
-
+        if cancelled_events:
             original_count = len(events)
-            events = [
-                e for e in events if e.date.strftime("%Y-%m-%d %H:%M") not in cancelled_event_ids
-            ]
+            events = [event for event in events if event not in cancelled_events]
             excluded_count = original_count - len(events)
             if excluded_count > 0:
                 logging.info(f"Excluding {excluded_count} cancelled event(s) from scheduling")
 
         if cancelled_availability:
-            peeps_by_email = {file_io.normalize_email(p.email): p for p in peeps}
-            unknown_emails = set(cancelled_availability.keys()) - set(peeps_by_email.keys())
-            if unknown_emails:
-                raise ValueError(
-                    f"cancelled availability email(s) not found in members: {sorted(unknown_emails)}"
-                )
-
-            loaded_event_ids = set(date_string_to_event_id.keys())
-            unknown_events = set()
-            unavailable_events = {}
-            for email, event_ids in cancelled_availability.items():
-                unknown_for_email = event_ids - loaded_event_ids
-                if unknown_for_email:
-                    unknown_events.update(unknown_for_email)
-
-                peep = peeps_by_email[email]
-                peep_event_ids = {
-                    event_id_to_date_string[event_id]
-                    for event_id in peep.availability
-                    if event_id in event_id_to_date_string
-                }
-                missing = event_ids - peep_event_ids
-                if missing:
-                    unavailable_events[email] = sorted(missing)
-
-            if unknown_events:
-                raise ValueError(
-                    f"cancelled availability event(s) not found in loaded events: {sorted(unknown_events)}"
-                )
-            if unavailable_events:
-                raise ValueError(
-                    f"cancelled availability includes events not in member availability: {unavailable_events}"
-                )
-
-            for email, event_ids in cancelled_availability.items():
-                peep = peeps_by_email[email]
-                cancelled_event_int_ids = {
-                    date_string_to_event_id[event_id]
-                    for event_id in event_ids
-                    if event_id in date_string_to_event_id
-                }
-                if cancelled_event_int_ids:
-                    peep.availability = [
-                        event_id
-                        for event_id in peep.availability
-                        if event_id not in cancelled_event_int_ids
-                    ]
+            for entry in cancelled_availability:
+                entry.peep.availability = [
+                    event for event in entry.peep.availability if event not in entry.events
+                ]
         responders = [p for p in peeps if p.responded]
         no_availability = [p.name for p in responders if not p.availability]
         non_responders = [p.name for p in peeps if not p.responded and p.active]

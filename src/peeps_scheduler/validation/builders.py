@@ -1,11 +1,6 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from peeps_scheduler.models import (
-    CancelledMemberAvailability,
-    Event,
-    PartnershipRequest,
-    Peep,
-)
+from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
 from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
 from peeps_scheduler.validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
@@ -19,7 +14,9 @@ from peeps_scheduler.validation.parsers import EventSpec
 
 
 def _member_to_peep(
-    member_data: MemberCsvRowSchema, response_data: ResponsesCsvFileSchema | None = None
+    member_data: MemberCsvRowSchema,
+    response_data: ResponsesCsvFileSchema | None = None,
+    events_by_datetime: dict | None = None,
 ) -> Peep:
     """
     Convert validated member and response data to Peep domain object.
@@ -27,6 +24,7 @@ def _member_to_peep(
     Args:
         member_data: Validated MemberCsvRowSchema
         response_data: Validated ResponsesCsvFileSchema, or None
+        events_by_datetime: Event lookup by start datetime
 
     Returns:
         Peep domain object with all fields mapped correctly
@@ -51,7 +49,14 @@ def _member_to_peep(
     if response_data:
         response = response_data.responses[0]
         peep_data["role"] = response.primary_role
-        peep_data["availability"] = [event.start for event in response.availability]
+        if events_by_datetime is None:
+            raise ValueError(
+                "events_by_datetime is required when response_data is provided "
+                f"for member id={member_data.id}, email={member_data.email_address!r}"
+            )
+        peep_data["availability"] = [
+            events_by_datetime[event.start] for event in response.availability
+        ]
         peep_data["switch_pref"] = response.secondary_role
         peep_data["event_limit"] = response.max_sessions
         peep_data["min_interval_days"] = response.min_interval_days
@@ -60,15 +65,17 @@ def _member_to_peep(
     return Peep(**peep_data)
 
 
-def _event_spec_to_event(spec: EventSpec) -> Event:
+def _event_spec_to_event(event_id: int, spec: EventSpec) -> Event:
     """
     Convert validated event spec to Event domain object.
     """
-    return Event(date=spec.start, duration_minutes=spec.duration_minutes)
+    return Event(id=event_id, date=spec.start, duration_minutes=spec.duration_minutes)
 
 
 def build_peeps(
-    member_dicts: list[MemberCsvRowSchema], response_dicts: ResponsesCsvFileSchema | dict
+    member_dicts: list[MemberCsvRowSchema],
+    response_dicts: ResponsesCsvFileSchema | dict,
+    events: list[Event],
 ) -> list[Peep]:
     """
     Convert validated members + responses to Peep domain objects.
@@ -79,6 +86,7 @@ def build_peeps(
         member_dicts: List of validated MemberCsvRowSchema objects
 
         response_dicts: Validated ResponsesCsvFileSchema or empty dict {} for cases with no responses
+        events: Event objects used to resolve availability
 
     Returns:
         List of Peep domain objects with response data integrated
@@ -98,6 +106,8 @@ def build_peeps(
         responses_map[email] = response
 
     peeps = []
+    events_by_datetime = {event.date: event for event in events}
+
     for member in member_dicts:
         email = normalize_email_for_match(member.email_address)
 
@@ -110,24 +120,36 @@ def build_peeps(
         if matching_response:
             response_to_pass = ResponsesCsvFileSchema(responses=[matching_response], event_rows=[])
 
-        peep = _member_to_peep(member, response_to_pass)
+        peep = _member_to_peep(member, response_to_pass, events_by_datetime)
         peeps.append(peep)
 
     return peeps
 
 
-def build_events(
-    event_specs: list[EventSpec],
-) -> list[Event]:
+def build_events(event_specs: list[EventSpec], preserve_order: bool) -> list[Event]:
     """
-    Build domain dataclasses from validated schemas.
+    Build Event domain objects from validated EventSpec instances.
 
     Args:
-        event_specs: Validated EventSpec list
+        event_specs: Validated EventSpec list.
+        preserve_order: Controls whether the resulting events keep the original
+            input order or are sorted chronologically.
+
+            - When event rows (e.g. explicit `event_rows` in the input file) are
+              present and their order should be preserved, call this function
+              with ``preserve_order=True`` so that the output list matches the
+              input ordering.
+            - When there are no such event rows and a chronological schedule is
+              desired, call this function with ``preserve_order=False`` so that
+              events are sorted by their start datetime.
+
     Returns:
-        Event objects
+        List of Event objects.
     """
-    events = [_event_spec_to_event(spec) for spec in event_specs]
+    ordered_specs = (
+        event_specs if preserve_order else sorted(event_specs, key=lambda spec: spec.start)
+    )
+    events = [_event_spec_to_event(index, spec) for index, spec in enumerate(ordered_specs)]
     return events
 
 

@@ -16,6 +16,7 @@ from peeps_scheduler.validation.builders import (
     _member_to_peep,
     build_cancelled_availability,
     build_cancelled_events,
+    build_events,
     build_partnerships,
     build_peeps,
 )
@@ -33,6 +34,14 @@ from tests.validation.fixtures import (
     member_data,
     response_data,
 )
+
+
+def _events_by_datetime(response_schema: ResponsesCsvFileSchema) -> dict:
+    events = [
+        Event(id=index, date=spec.start, duration_minutes=spec.duration_minutes)
+        for index, spec in enumerate(response_schema.events)
+    ]
+    return {event.date: event for event in events}
 
 
 @pytest.mark.contract
@@ -88,7 +97,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         # Response role should override member role
         assert peep.role == Role.FOLLOWER
@@ -110,10 +120,18 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert len(peep.availability) == 2
-        assert all(isinstance(event_date, datetime.datetime) for event_date in peep.availability)
+        assert all(isinstance(event, Event) for event in peep.availability)
+        assert all(event.date.tzinfo == ctx.tz for event in peep.availability)
+        # Verify the correct events are in availability
+        expected_dates = [
+            datetime.datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz),
+            datetime.datetime(2020, 1, 5, 14, 0, tzinfo=ctx.tz),
+        ]
+        assert sorted([event.date for event in peep.availability]) == sorted(expected_dates)
 
     def test_member_with_response_sets_switch_preference(self, ctx):
         """Edge case: Response secondary_role becomes switch_pref."""
@@ -134,7 +152,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.switch_pref == SwitchPreference.SWITCH_IF_NEEDED
 
@@ -151,7 +170,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.event_limit == 4
 
@@ -168,7 +188,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.min_interval_days == 7
 
@@ -193,7 +214,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.topic_votes == [
             "Balance for Spins and Turns",
@@ -213,7 +235,8 @@ class TestMemberToPeep:
             context={"ctx": response_ctx},
         )
 
-        peep = _member_to_peep(member_schema, response_schema)
+        events_by_datetime = _events_by_datetime(response_schema)
+        peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.responded is True
 
@@ -248,10 +271,56 @@ class TestEventSpecToEvent:
             duration_minutes=90,
             raw="Saturday January 4 - 1pm",
         )
-        event = _event_spec_to_event(spec)
+        event = _event_spec_to_event(1, spec)
 
+        assert event.id == 1
         assert event.date == spec.start
         assert event.duration_minutes == spec.duration_minutes
+
+
+@pytest.mark.unit
+class TestBuildEvents:
+    """Tests for build_events factory function."""
+
+    def test_build_events_preserves_order_when_event_rows_exist(self):
+        """Happy path: preserves event order and assigns sequential IDs."""
+        specs = [
+            EventSpec(
+                start=datetime.datetime(2020, 1, 5, 13, 0),
+                duration_minutes=90,
+                raw="Sunday January 5 - 1pm",
+            ),
+            EventSpec(
+                start=datetime.datetime(2020, 1, 4, 13, 0),
+                duration_minutes=90,
+                raw="Saturday January 4 - 1pm",
+            ),
+        ]
+
+        events = build_events(specs, preserve_order=True)
+
+        assert [event.id for event in events] == [0, 1]
+        assert [event.date for event in events] == [specs[0].start, specs[1].start]
+
+    def test_build_events_sorts_by_start_without_event_rows(self):
+        """Happy path: assigns IDs in chronological order when no event rows exist."""
+        specs = [
+            EventSpec(
+                start=datetime.datetime(2020, 1, 5, 13, 0),
+                duration_minutes=90,
+                raw="Sunday January 5 - 1pm",
+            ),
+            EventSpec(
+                start=datetime.datetime(2020, 1, 4, 13, 0),
+                duration_minutes=90,
+                raw="Saturday January 4 - 1pm",
+            ),
+        ]
+
+        events = build_events(specs, preserve_order=False)
+
+        assert [event.id for event in events] == [0, 1]
+        assert [event.date for event in events] == [specs[1].start, specs[0].start]
 
 
 @pytest.mark.contract
@@ -270,20 +339,22 @@ class TestBuildPeeps:
             },
             context={"ctx": response_ctx},
         )
+        events = build_events(validated_responses.events, preserve_order=False)
 
-        peeps = build_peeps(validated_members, validated_responses)
+        peeps = build_peeps(validated_members, validated_responses, events)
 
         assert len(peeps) == 1
         assert isinstance(peeps[0], Peep)
         assert peeps[0].full_name == "Alice Alpha"
         assert peeps[0].responded is True
+        assert peeps[0].availability == events
 
     def test_handles_members_without_responses(self, ctx):
         """Edge case: Members without responses are still converted to Peeps."""
 
         validated_members = MembersCsvFileSchema.model_validate([member_data()]).root
 
-        peeps = build_peeps(validated_members, {})
+        peeps = build_peeps(validated_members, {}, [])
 
         assert len(peeps) == 1
         assert peeps[0].responded is False
@@ -318,9 +389,10 @@ class TestBuildPeeps:
             },
             context={"ctx": response_ctx},
         )
+        events = build_events(validated_responses.events, preserve_order=False)
 
         # Convert - should match despite different email formats
-        peeps = build_peeps(validated_members, validated_responses)
+        peeps = build_peeps(validated_members, validated_responses, events)
 
         # Verify match was successful
         assert len(peeps) == 1

@@ -410,6 +410,13 @@ class TestEventDataConversion:
         assert event.date == datetime.datetime(2025, 7, 20, 18, 0)
         assert event.duration_minutes == 120
 
+    def test_id_is_immutable(self):
+        """Test that event id cannot be reassigned after initialization."""
+        event = Event(id=42, date=datetime.datetime(2025, 3, 15, 19, 0), duration_minutes=90)
+
+        with pytest.raises(AttributeError, match="event id is immutable"):
+            event.id = 99
+
     def test_assigns_default_duration_if_missing(self):
         """Test that from_dict assigns default duration if missing."""
         original_data = {"id": 456, "date": datetime.datetime(2025, 8, 10, 17, 30)}

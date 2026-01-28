@@ -7,6 +7,7 @@ Provides composable functions for loading, validating, and converting period dat
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from pydantic import ValidationError
 from peeps_scheduler import file_io
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
@@ -17,6 +18,7 @@ from peeps_scheduler.validation.builders import (
     build_partnerships,
     build_peeps,
 )
+from peeps_scheduler.validation.errors import FileValidationError
 from peeps_scheduler.validation.fields import ValidationContext
 from peeps_scheduler.validation.file_schemas.period import (
     PeriodFileSchema,
@@ -54,8 +56,33 @@ def load_and_validate_period(period_path: str, year: int) -> PeriodData:
     """
     raw = load_period_files(period_path)
     ctx = ValidationContext(year=year, tz=DEFAULT_TIMEZONE)
-    period_schema = PeriodFileSchema.model_validate(raw, context={"ctx": ctx})
+    try:
+        period_schema = PeriodFileSchema.model_validate(raw, context={"ctx": ctx})
+    except ValidationError as exc:
+        file_path = _infer_validation_file(exc, Path(period_path))
+        raise FileValidationError(str(file_path), exc) from exc
     return to_period_data(period_schema, year)
+
+
+def _infer_validation_file(error: ValidationError, period_dir: Path) -> Path:
+    fields = set()
+    for err in error.errors():
+        loc = err.get("loc") or ()
+        fields.add(loc[0] if loc else None)
+    if len(fields) == 1:
+        field = next(iter(fields))
+        if field == "members":
+            return period_dir / "members.csv"
+        if field == "responses":
+            return period_dir / "responses.csv"
+        if field in {
+            "cancelled_events",
+            "cancelled_member_availability",
+            "partnership_requests",
+            "topics",
+        }:
+            return period_dir / "period_config.json"
+    return period_dir / "period_config.json"
 
 
 def load_period_files(period_path: str) -> dict:
@@ -84,6 +111,15 @@ def load_period_files(period_path: str) -> dict:
     member_rows = file_io.load_csv(str(members_file))
     response_rows = file_io.load_csv(str(responses_file))
 
+    event_rows = []
+    response_data_rows = []
+    for row in response_rows:
+        name = (row.get("Name") or "").strip()
+        if name.startswith("Event:"):
+            event_rows.append({**row, "Name": name.split("Event:", 1)[1].strip()})
+        else:
+            response_data_rows.append(row)
+
     # Load optional period_config.json (contains cancellations, partnerships, topics)
     period_config_data = {}
     if period_config_file.is_file():
@@ -93,8 +129,8 @@ def load_period_files(period_path: str) -> dict:
     return {
         "members": member_rows,
         "responses": {
-            "responses": response_rows,
-            "event_rows": None,
+            "responses": response_data_rows,
+            "event_rows": event_rows or None,
         },
         "cancelled_events": period_config_data.get("cancelled_events", []),
         "cancelled_member_availability": period_config_data.get(
@@ -116,8 +152,9 @@ def to_period_data(period_schema: PeriodFileSchema, year: int) -> PeriodData:
     Returns:
         PeriodData with all components assembled
     """
-    peeps = build_peeps(period_schema.members.root, period_schema.responses)
-    events = build_events(period_schema.responses.events)
+    preserve_order = bool(period_schema.responses.event_rows)
+    events = build_events(period_schema.responses.events, preserve_order)
+    peeps = build_peeps(period_schema.members.root, period_schema.responses, events)
     cancelled_events = build_cancelled_events(period_schema.cancelled_events, events)
     cancelled_availability = build_cancelled_availability(
         period_schema.cancelled_member_availability, peeps, events

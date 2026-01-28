@@ -18,37 +18,57 @@ class TestPeepConstraints:
 
     def test_can_attend_when_available(self):
         """Test that peep can attend event in their availability."""
-        peep = Peep(id=1, role="leader", availability=[1, 2, 3], event_limit=2)
-        event = Event(id=2, duration_minutes=120)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120),
+            Event(id=2, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120),
+            Event(id=3, date=datetime.datetime(2025, 1, 11, 10), duration_minutes=120),
+        ]
+        peep = Peep(id=1, role="leader", availability=availability, event_limit=2)
+        event = Event(id=2, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
 
         assert peep.can_attend(event)
 
     def test_cannot_attend_when_unavailable(self):
         """Test that peep cannot attend event not in availability."""
-        peep = Peep(id=1, role="leader", availability=[1, 3], event_limit=2)  # No event 2
-        event = Event(id=2, duration_minutes=120)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120),
+            Event(id=3, date=datetime.datetime(2025, 1, 11, 10), duration_minutes=120),
+        ]
+        peep = Peep(id=1, role="leader", availability=availability, event_limit=2)  # No event 2
+        event = Event(id=2, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
 
         assert not peep.can_attend(event)
 
     def test_cannot_attend_when_over_event_limit(self):
         """Test that peep cannot attend when at event limit."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=1)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120)
+        ]
+        peep = Peep(id=1, role="leader", availability=availability, event_limit=1)
         peep.num_events = 1  # Already at limit
-        event = Event(id=1, duration_minutes=120)
+        event = Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120)
 
         assert not peep.can_attend(event)
 
     def test_can_attend_when_under_event_limit(self):
         """Test that peep can attend when under event limit."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120)
+        ]
+        peep = Peep(id=1, role="leader", availability=availability, event_limit=2)
         peep.num_events = 1  # Under limit
-        event = Event(id=1, duration_minutes=120)
+        event = Event(id=1, date=datetime.datetime(2025, 1, 10, 10), duration_minutes=120)
 
         assert peep.can_attend(event)
 
     def test_cannot_attend_within_interval_days(self):
         """Test that peep cannot attend event within minimum interval."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=3)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 18), duration_minutes=120)
+        ]
+        peep = Peep(
+            id=1, role="leader", availability=availability, event_limit=2, min_interval_days=3
+        )
         event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
 
         # Add a previous event 2 days ago (within 3-day interval)
@@ -59,7 +79,12 @@ class TestPeepConstraints:
 
     def test_can_attend_exactly_at_interval_days(self):
         """Test that peep can attend event exactly at minimum interval."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=3)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 18), duration_minutes=120)
+        ]
+        peep = Peep(
+            id=1, role="leader", availability=availability, event_limit=2, min_interval_days=3
+        )
         event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
 
         # Add a previous event exactly 3 days ago (meets interval requirement)
@@ -70,7 +95,12 @@ class TestPeepConstraints:
 
     def test_can_attend_with_zero_interval_days(self):
         """Test that peep with zero interval can attend multiple events same day."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=0)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
+        ]
+        peep = Peep(
+            id=1, role="leader", availability=availability, event_limit=2, min_interval_days=0
+        )
         event = Event(id=1, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
 
         # Add a previous event same day
@@ -81,7 +111,12 @@ class TestPeepConstraints:
 
     def test_interval_calculation_works_both_directions(self):
         """Test that interval checking works for events before or after previous events."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=2)
+        availability = [
+            Event(id=1, date=datetime.datetime(2025, 1, 10, 18), duration_minutes=120)
+        ]
+        peep = Peep(
+            id=1, role="leader", availability=availability, event_limit=2, min_interval_days=2
+        )
 
         # Event is 2025-01-10
         event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)

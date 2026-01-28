@@ -486,7 +486,6 @@ def extract_events(rows, year=None):
                     "duration_minutes": duration,
                 }
             )
-            event.id = event_counter
             event_map[event_id] = event
             event_counter += 1
 
@@ -546,7 +545,6 @@ def extract_events(rows, year=None):
                     "duration_minutes": duration,
                 }
             )
-            event.id = event_counter
             event_map[event_id] = event
             event_counter += 1
 
