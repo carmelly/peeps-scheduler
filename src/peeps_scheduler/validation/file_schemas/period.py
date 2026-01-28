@@ -219,9 +219,7 @@ def validate_topics(topics: list[str] | None) -> None:
         normalized_lookup.setdefault(normalized, topic)
 
 
-def filter_response_topics(
-    responses: list, topics: list[str] | None
-) -> None:
+def filter_response_topics(responses: list, topics: list[str] | None) -> None:
     """Filter response deep_dive_topics to only those in the period topic list."""
     if not topics:
         for response in responses:
@@ -237,6 +235,7 @@ def filter_response_topics(
                 filtered.append(lookup[normalized])
         response.deep_dive_topics = filtered
 
+
 def validate_cancellations(
     event_starts: set,
     member_emails: set[str],
@@ -245,6 +244,11 @@ def validate_cancellations(
     cancelled_availability: list[CancelledAvailabilityJsonSchema] | None,
 ) -> None:
     """Ensure cancellation references map to known events and members."""
+    if not event_starts:
+        if cancelled_events or cancelled_availability:
+            raise ValueError("cancellations require responses with events")
+        return
+
     if cancelled_events:
         missing_cancelled = [
             event.raw for event in cancelled_events if event.start not in event_starts
@@ -290,15 +294,22 @@ def validate_event_references(
     results: ResultsJsonSchema | None,
     attendance: ActualAttendanceJsonSchema | None,
 ) -> None:
-    """Ensure results and attendance event dates match extracted responses.events."""
+    """
+    Ensure results and attendance event dates match extracted responses.events.
+
+    Note: Attendance events can exist without responses (apply-results workflow),
+    but results always require responses since they represent scheduled output.
+    """
     if results:
+        if not event_starts:
+            raise ValueError("results require responses with events")
         missing_result_events = [
             event.start_dt for event in results.valid_events if event.start_dt not in event_starts
         ]
         if missing_result_events:
             raise ValueError(f"result event not found: {missing_result_events}")
 
-    if attendance:
+    if attendance and event_starts:
         missing_attendance_events = [
             event.start_dt
             for event in attendance.valid_events

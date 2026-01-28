@@ -9,34 +9,44 @@ from peeps_scheduler.scheduler import Scheduler
 from peeps_scheduler.validation import FileValidationError, load_and_validate_period
 
 
-def apply_results(period_folder, results_filename="actual_attendance.json"):
+def apply_results(period_folder):
     dm = get_data_manager()
     period_path = Path(dm.get_period_path(period_folder))
-    actual_attendance_file = period_path / results_filename
+    actual_attendance_file = period_path / "actual_attendance.json"
     members_file = period_path / "members.csv"
-    responses_file = period_path / "responses.csv"
 
-    # Check that required files exist
-    if not actual_attendance_file.exists():
-        logging.error(f"Actual attendance file not found: {actual_attendance_file}")
-        return False
-    if not members_file.exists():
-        logging.error(f"Members file not found: {members_file}")
-        return False
+    folder_name = period_path.name
+    try:
+        year = int(folder_name[:4])
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"cannot infer year from period folder '{folder_name}' (expected YYYY prefix)"
+        ) from exc
 
-    # responses.csv is optional but we'll warn if missing
-    if not responses_file.exists():
-        logging.warning(
-            f"Responses file not found: {responses_file} - priority will not be updated for non-attendees who responded"
+    try:
+        apply_results_data = load_and_validate_period(
+            str(period_path),
+            year,
+            allow_missing_responses=True,
+            require_attendance=True,
         )
-        responses_file = None
+    except (FileValidationError, FileNotFoundError) as exc:
+        logging.error(str(exc))
+        sys.exit(1)
+
+    responses_file = period_path / "responses.csv"
+    has_responses = any(peep.responded for peep in apply_results_data.peeps)
+    if not has_responses:
+        logging.warning(
+            "No responses loaded; priority will not be updated for non-attendees who responded"
+        )
 
     logging.info(f"Applying {actual_attendance_file} to update {members_file}")
-    if responses_file:
+    if has_responses:
         logging.info(f"Using responses file: {responses_file}")
 
     # Apply results to fresh member list
-    updated_peeps = utils.apply_event_results(actual_attendance_file, members_file, responses_file)
+    updated_peeps = utils.apply_event_results(apply_results_data)
     from peeps_scheduler.file_io import save_peeps_csv
 
     save_peeps_csv(updated_peeps, members_file)
@@ -74,11 +84,6 @@ def main():
         "--period-folder",
         required=True,
         help="Path to period folder containing actual_attendance.json, members.csv, and responses.csv",
-    )
-    apply_parser.add_argument(
-        "--results-file",
-        default="actual_attendance.json",
-        help="Filename of results JSON (default: actual_attendance.json)",
     )
 
     # Availability report command
@@ -152,7 +157,7 @@ def main():
         )
         scheduler.run()
     elif args.command == "apply-results":
-        apply_results(args.period_folder, args.results_file)
+        apply_results(args.period_folder)
     elif args.command == "availability-report":
         from peeps_scheduler.availability_report import run_availability_report
 

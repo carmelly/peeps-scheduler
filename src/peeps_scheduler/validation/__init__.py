@@ -13,11 +13,13 @@ Public API:
 
 # Builders (schemas → domain objects)
 from peeps_scheduler.validation.builders import (
+    build_attendance_events,
     build_cancelled_availability,
     build_cancelled_events,
     build_events,
     build_partnerships,
     build_peeps,
+    build_results_events,
 )
 
 # Errors
@@ -70,11 +72,13 @@ __all__ = [
     "ResultEventJsonSchema",
     "ResultsJsonSchema",
     "RosterEntryJsonSchema",
+    "build_attendance_events",
     "build_cancelled_availability",
     "build_cancelled_events",
     "build_events",
     "build_partnerships",
     "build_peeps",
+    "build_results_events",
     "load_and_validate_period",
     "load_period_files",
     "to_period_data",

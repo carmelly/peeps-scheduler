@@ -4,8 +4,8 @@ import json
 import logging
 from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
 from peeps_scheduler.data_manager import get_data_manager
-from peeps_scheduler.file_io import load_csv, normalize_email
-from peeps_scheduler.models import Event, EventSequence, Peep, Role
+from peeps_scheduler.models import EventSequence, Peep
+from peeps_scheduler.validation.period import PeriodData
 
 
 def generate_event_permutations(events):
@@ -38,68 +38,9 @@ def setup_logging(verbose=False):
     )
 
 
-def apply_event_results(result_json, members_csv, responses_csv):
-    peep_rows = load_csv(members_csv)
-    fresh_peeps = []
-    for row in peep_rows:
-        peep = Peep(
-            id=row["id"],
-            full_name=row["Name"],
-            display_name=row["Display Name"],
-            email=row["Email Address"],
-            role=row["Role"],
-            index=int(row["Index"]),
-            priority=int(row["Priority"]),
-            total_attended=int(row["Total Attended"]),
-            availability=[],
-            event_limit=0,
-            min_interval_days=0,
-            active=row["Active"],
-            date_joined=row["Date Joined"],
-        )
-        fresh_peeps.append(peep)
-
-    # Process responses to mark who responded
-    responded_emails = set()
-    if responses_csv and responses_csv.exists():
-        response_rows = load_csv(responses_csv)
-        for row in response_rows:
-            email = normalize_email(row.get("Email Address", ""))
-            if email:  # Only add non-empty emails
-                responded_emails.add(email)
-        logging.debug(f"Found {len(responded_emails)} unique respondents in {responses_csv}")
-    else:
-        logging.debug(
-            "No responses file provided or file does not exist; skipping response processing."
-        )
-
-    # Set responded flag based on email match
-    for peep in fresh_peeps:
-        if peep.email and normalize_email(peep.email) in responded_emails:
-            peep.responded = True
-            logging.debug(f"Marked peep {peep.id} ({peep.email}) as responded")
-        else:
-            peep.responded = False
-
-    with result_json.open() as f:
-        result_data = json.load(f)
-
-    event_data = result_data["valid_events"]
-    events = []
-    for e in event_data:
-        event = Event(
-            id=e["id"],
-            duration_minutes=e["duration_minutes"],
-            date=datetime.datetime.strptime(e["date"], DATE_FORMAT),
-            min_role=0,
-            max_role=0,
-        )
-        for peep_info in e["attendees"]:
-            for peep in fresh_peeps:
-                if peep.id == peep_info["id"]:
-                    role = Role.from_string(peep_info["role"])
-                    event.add_attendee(peep, role)
-        events.append(event)
+def apply_event_results(period_data: PeriodData):
+    fresh_peeps = period_data.peeps
+    events = period_data.attendance_events
 
     sequence = EventSequence(events, fresh_peeps)
     sequence.valid_events = events  # Mark them valid (since they came from results.json)

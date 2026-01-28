@@ -1,6 +1,7 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
 from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
+from peeps_scheduler.validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
 from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
 from peeps_scheduler.validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
@@ -9,6 +10,7 @@ from peeps_scheduler.validation.file_schemas.period import (
 from peeps_scheduler.validation.file_schemas.responses_csv import (
     ResponsesCsvFileSchema,
 )
+from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.helpers import normalize_email_for_match
 from peeps_scheduler.validation.parsers import EventSpec
 
@@ -231,3 +233,46 @@ def build_partnerships(
         for schema in schemas
     ]
     return partnership_requests
+
+
+def build_attendance_events(
+    attendance: ActualAttendanceJsonSchema | None, peeps: list[Peep]
+) -> list[Event]:
+    """Build Event objects from validated attendance data."""
+    if attendance is None:
+        return []
+    peeps_by_id = {peep.id: peep for peep in peeps}
+    events = []
+    for attendance_event in attendance.valid_events:
+        event = Event(
+            id=attendance_event.legacy_id,
+            date=attendance_event.start_dt,
+            duration_minutes=attendance_event.duration_minutes,
+        )
+        for attendee in attendance_event.attendees:
+            peep = peeps_by_id[attendee.id]
+            event.add_attendee(peep, attendee.role)
+        events.append(event)
+    return events
+
+
+def build_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -> list[Event]:
+    """Build Event objects from validated results data."""
+    if results is None:
+        return []
+    peeps_by_id = {peep.id: peep for peep in peeps}
+    events = []
+    for result_event in results.valid_events:
+        event = Event(
+            id=result_event.legacy_id,
+            date=result_event.start_dt,
+            duration_minutes=result_event.duration_minutes,
+        )
+        for attendee in result_event.attendees:
+            peep = peeps_by_id[attendee.id]
+            event.add_attendee(peep, attendee.role)
+        for alternate in result_event.alternates:
+            peep = peeps_by_id[alternate.id]
+            event.add_alternate(peep, alternate.role)
+        events.append(event)
+    return events

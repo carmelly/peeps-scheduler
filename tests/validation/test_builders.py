@@ -14,13 +14,16 @@ from peeps_scheduler.models import (
 from peeps_scheduler.validation.builders import (
     _event_spec_to_event,
     _member_to_peep,
+    build_attendance_events,
     build_cancelled_availability,
     build_cancelled_events,
     build_events,
     build_partnerships,
     build_peeps,
+    build_results_events,
 )
 from peeps_scheduler.validation.fields import ValidationContext
+from peeps_scheduler.validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
 from peeps_scheduler.validation.file_schemas.members_csv import (
     MembersCsvFileSchema,
 )
@@ -29,10 +32,15 @@ from peeps_scheduler.validation.file_schemas.period import (
     PartnershipRequestJsonSchema,
 )
 from peeps_scheduler.validation.file_schemas.responses_csv import ResponsesCsvFileSchema
+from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.parsers import EventSpec
 from tests.validation.fixtures import (
+    attendance_data,
+    attendance_event_data,
     member_data,
     response_data,
+    result_event_data,
+    results_data,
 )
 
 
@@ -526,3 +534,85 @@ class TestBuildPartnerships:
         peeps = [peep_factory(id=1, email="alice@example.com")]
         partnerships = build_partnerships(schemas=requests, peeps=peeps)
         assert partnerships == []
+
+
+class TestBuildAttendanceEvents:
+    """Tests for build_attendance_events function."""
+
+    def test_builds_attendance_events(self, peep_factory, ctx):
+        """Happy path: Builds Event objects with attendee assignments."""
+        peeps = [
+            peep_factory(id=1, role=Role.LEADER),
+            peep_factory(id=2, role=Role.FOLLOWER),
+        ]
+        attendance_payload = attendance_data(
+            {
+                "valid_events": [
+                    attendance_event_data(
+                        {
+                            "id": 1,
+                            "date": "2020-01-04 13:00",
+                            "duration_minutes": 90,
+                            "attendees": [
+                                {"id": 1, "name": "Leader One", "role": "leader"},
+                                {"id": 2, "name": "Follower Two", "role": "follower"},
+                            ],
+                        }
+                    )
+                ]
+            }
+        )
+        schema = ActualAttendanceJsonSchema.model_validate(attendance_payload, context={"ctx": ctx})
+
+        events = build_attendance_events(schema, peeps)
+
+        assert len(events) == 1
+        event = events[0]
+        assert event.id == 1
+        assert peeps[0] in event.leaders
+        assert peeps[1] in event.followers
+
+
+class TestBuildResultsEvents:
+    """Tests for build_results_events function."""
+
+    def test_builds_results_events_with_alternates(self, peep_factory, ctx):
+        """Happy path: Builds Event objects with attendees and alternates."""
+        peeps = [
+            peep_factory(id=1, role=Role.LEADER),
+            peep_factory(id=2, role=Role.FOLLOWER),
+            peep_factory(id=3, role=Role.LEADER),
+            peep_factory(id=4, role=Role.FOLLOWER),
+        ]
+        results_payload = results_data(
+            {
+                "valid_events": [
+                    result_event_data(
+                        {
+                            "id": 2,
+                            "date": "2020-01-04 13:00",
+                            "duration_minutes": 90,
+                            "attendees": [
+                                {"id": 1, "name": "Leader One", "role": "leader"},
+                                {"id": 2, "name": "Follower Two", "role": "follower"},
+                            ],
+                            "alternates": [
+                                {"id": 3, "name": "Alt Leader", "role": "leader"},
+                                {"id": 4, "name": "Alt Follower", "role": "follower"},
+                            ],
+                        }
+                    )
+                ]
+            }
+        )
+        schema = ResultsJsonSchema.model_validate(results_payload, context={"ctx": ctx})
+
+        events = build_results_events(schema, peeps)
+
+        assert len(events) == 1
+        event = events[0]
+        assert event.id == 2
+        assert peeps[0] in event.leaders
+        assert peeps[1] in event.followers
+        assert peeps[2] in event.alt_leaders
+        assert peeps[3] in event.alt_followers
