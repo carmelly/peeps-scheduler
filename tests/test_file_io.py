@@ -702,10 +702,9 @@ class TestDataSaving:
         """Ensure save_peeps_csv writes correct rows and creates file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
-            filename = tmpdir / "members.csv"
-            save_peeps_csv(sample_peeps, filename)
-
             output_path = tmpdir / "members_updated.csv"
+            save_peeps_csv(sample_peeps, output_path)
+
             assert output_path.exists()
 
             with output_path.open() as f:

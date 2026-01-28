@@ -22,6 +22,7 @@ ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 
 # Default event duration when not specified in event data
 DEFAULT_EVENT_DURATION = 120  # minutes
+DEFAULT_MAX_EVENTS = 7
 
 # === Data Management Configuration ===
 

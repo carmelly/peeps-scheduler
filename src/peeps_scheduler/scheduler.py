@@ -13,7 +13,7 @@ class Scheduler:
         self,
         period_data: PeriodData,
         data_folder,
-        max_events,
+        max_events: int = constants.DEFAULT_MAX_EVENTS,
         interactive=True,
         sequence_choice=0,
     ):
@@ -275,6 +275,36 @@ class Scheduler:
             and s.mutual_repeat_fulfilled == best_mutual_repeat
             and s.one_sided_fulfilled == best_one_sided
         ]
+
+    def apply_results(self):
+        """Apply attendance results to peeps, save members_updated.csv, and return updated roster."""
+        fresh_peeps = self.period_data.peeps
+        events = self.period_data.attendance_events
+
+        sequence = EventSequence(events, fresh_peeps)
+        sequence.valid_events = events
+
+        # Only update actual attendees, alternates are ignored.
+        for event in sequence.valid_events:
+            Peep.update_event_attendees(fresh_peeps, event)
+        sequence.finalize()
+
+        has_responses = any(peep.responded for peep in fresh_peeps)
+        if not has_responses:
+            logging.warning(
+                "No responses loaded; priority will not be updated for non-attendees who responded"
+            )
+
+        attendance_file = self.period_path / "actual_attendance.json"
+        members_file = self.period_path / "members.csv"
+        output_file = self.period_path / "members_updated.csv"
+        logging.info(f"Applying {attendance_file} to update {members_file}")
+        if has_responses:
+            logging.info(f"Using responses file: {self.period_path / 'responses.csv'}")
+
+        file_io.save_peeps_csv(sequence.peeps, output_file)
+        logging.info("Updated members.csv ready for Google Sheets upload.")
+        return sequence.peeps
 
     def run(self):
         peeps = list(self.period_data.peeps)

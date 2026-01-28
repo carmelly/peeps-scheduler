@@ -4,8 +4,6 @@ import json
 import logging
 from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
 from peeps_scheduler.data_manager import get_data_manager
-from peeps_scheduler.models import EventSequence, Peep
-from peeps_scheduler.validation.period import PeriodData
 
 
 def generate_event_permutations(events):
@@ -36,21 +34,6 @@ def setup_logging(verbose=False):
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[stream_handler, file_handler],
     )
-
-
-def apply_event_results(period_data: PeriodData):
-    fresh_peeps = period_data.peeps
-    events = period_data.attendance_events
-
-    sequence = EventSequence(events, fresh_peeps)
-    sequence.valid_events = events  # Mark them valid (since they came from results.json)
-
-    # Only update actual attendees, alts are not considered now
-    for event in sequence.valid_events:
-        Peep.update_event_attendees(fresh_peeps, event)
-    sequence.finalize()
-
-    return sequence.peeps
 
 
 def format_event_date_str(date_str):

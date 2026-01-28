@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from peeps_scheduler import utils
+from peeps_scheduler import constants, utils
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.scheduler import Scheduler
 from peeps_scheduler.validation import FileValidationError, load_and_validate_period
@@ -12,8 +12,6 @@ from peeps_scheduler.validation import FileValidationError, load_and_validate_pe
 def apply_results(period_folder):
     dm = get_data_manager()
     period_path = Path(dm.get_period_path(period_folder))
-    actual_attendance_file = period_path / "actual_attendance.json"
-    members_file = period_path / "members.csv"
 
     folder_name = period_path.name
     try:
@@ -34,23 +32,11 @@ def apply_results(period_folder):
         logging.error(str(exc))
         sys.exit(1)
 
-    responses_file = period_path / "responses.csv"
-    has_responses = any(peep.responded for peep in apply_results_data.peeps)
-    if not has_responses:
-        logging.warning(
-            "No responses loaded; priority will not be updated for non-attendees who responded"
-        )
-
-    logging.info(f"Applying {actual_attendance_file} to update {members_file}")
-    if has_responses:
-        logging.info(f"Using responses file: {responses_file}")
-
-    # Apply results to fresh member list
-    updated_peeps = utils.apply_event_results(apply_results_data)
-    from peeps_scheduler.file_io import save_peeps_csv
-
-    save_peeps_csv(updated_peeps, members_file)
-    logging.info("Updated members.csv ready for Google Sheets upload.")
+    scheduler = Scheduler(
+        period_data=apply_results_data,
+        data_folder=period_folder,
+    )
+    scheduler.apply_results()
     return True
 
 
@@ -73,7 +59,10 @@ def main():
         help="Path to data folder",
     )
     run_parser.add_argument(
-        "--max-events", type=int, default=7, help="Maximum number of events to schedule"
+        "--max-events",
+        type=int,
+        default=constants.DEFAULT_MAX_EVENTS,
+        help="Maximum number of events to schedule",
     )
 
     # Apply results command

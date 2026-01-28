@@ -124,10 +124,10 @@ def load_responses(response_csv_path):
     return load_csv(response_csv_path, RESPONSES_CSV_FIELDS)
 
 
-def save_peeps_csv(peeps: list[Peep], filename):
-    """Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
-    output_path = Path(filename).parent / "members_updated.csv"
-    with Path(output_path).open("w", newline="", encoding="utf-8") as csvfile:
+def save_peeps_csv(peeps: list[Peep], output_path: Path):
+    """Save updated peeps to the provided output path."""
+    output_path = Path(output_path)
+    with output_path.open("w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=PEEPS_CSV_FIELDS)
         writer.writeheader()
         for peep in peeps:
