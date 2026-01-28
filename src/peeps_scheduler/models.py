@@ -11,11 +11,7 @@ class Role(Enum):
     FOLLOWER = "follower"
 
     def opposite(self):
-        if self == Role.LEADER:
-            return Role.FOLLOWER
-        elif self == Role.FOLLOWER:
-            return Role.LEADER
-        raise ValueError(f"no opposite defined for role: {self}")
+        return Role.FOLLOWER if self == Role.LEADER else Role.LEADER
 
 
 class SwitchPreference(Enum):
@@ -156,8 +152,6 @@ class Event:
         self.date = kwargs.get("date")  # TODO: validate that this is a datetime
 
         self.duration_minutes = kwargs.get("duration_minutes") or constants.DEFAULT_EVENT_DURATION
-        if self.duration_minutes not in constants.CLASS_CONFIG:
-            raise ValueError(f"unknown event duration: {self.duration_minutes}")
 
         self.topic = kwargs.get("topic")
 
