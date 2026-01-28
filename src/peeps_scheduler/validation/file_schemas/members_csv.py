@@ -37,13 +37,18 @@ class MemberCsvRowSchema(BaseModel):
     @field_validator("date_joined", mode="before")
     @classmethod
     def validate_date_joined(cls, v):
-        """Date Joined must be valid date string with format "%m/%d/%Y."""
+        """Date Joined must be a valid date string."""
+        if isinstance(v, date):
+            return v
         if not isinstance(v, str):
             raise ValueError("Date Joined must be a string")
-        try:
-            return datetime.strptime(v, "%m/%d/%Y").date()
-        except ValueError as e:
-            raise ValueError(f"invalid date format: {v}") from e
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(v, fmt).date()
+            except ValueError:
+                continue
+        # TODO: Remove support for "%m/%d/%Y" after historical files are normalized.
+        raise ValueError(f"invalid date format: {v}")
 
 
 class MembersCsvFileSchema(RootModel[list[MemberCsvRowSchema]]):

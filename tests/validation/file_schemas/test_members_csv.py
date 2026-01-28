@@ -32,10 +32,17 @@ class TestMemberCsvRowSchema:
         )
         assert schema.display_name is None
 
+    @pytest.mark.parametrize("date_value", ["1/2/2020", "2020-01-02"])
+    def test_date_joined_accepts_multiple_formats(self, ctx, date_value):
+        schema = MemberCsvRowSchema.model_validate(
+            member_data({"Date Joined": date_value}),
+            context={"ctx": ctx},
+        )
+        assert schema.date_joined.year == 2020
+
     @pytest.mark.parametrize(
         "data, msg",
         [
-            ("2022-01-01", "invalid date"),
             ("not a date", "invalid date"),
             ("", "invalid date"),
             (2020, "must be a string"),
