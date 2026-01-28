@@ -1,6 +1,5 @@
 import datetime
 import logging
-import random
 from dataclasses import dataclass
 from enum import Enum
 import peeps_scheduler.constants as constants
@@ -48,10 +47,6 @@ class Peep:
         self.active = kwargs.get("active")
         self.date_joined = kwargs.get("date_joined")
         self.responded = kwargs.get("responded", False)
-
-    @staticmethod
-    def is_peeps_list_sorted_by_priority(peeps: list["Peep"]):
-        return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps) - 1))
 
     def to_csv(self) -> dict:
         return {
@@ -119,25 +114,6 @@ class Peep:
         return True
 
     @staticmethod
-    def find_matching_peep(peeps, name, email):
-        matched_peeps = []
-        if email:
-            matched_peeps = [
-                peep for peep in peeps.values() if peep.get("email", "").lower() == email.lower()
-            ]
-
-        if not matched_peeps:
-            logging.error(f"No matching peeps for {name} ({email}). Please check input data.")
-            return None
-        elif len(matched_peeps) > 1:
-            logging.error(
-                f"More than one matching peep for {name} ({email}). Please check input data."
-            )
-            return None
-
-        return matched_peeps[0]
-
-    @staticmethod
     def update_event_attendees(peeps, event):
         """For all successful attendees, reset priority and send to the back of the line."""
         for peep in event.attendees:
@@ -148,27 +124,6 @@ class Peep:
             # Move successful peeps to the end of the list
             peeps.remove(peep)
             peeps.append(peep)
-
-    @classmethod
-    def generate_test_peep(cls, id, index, event_ids):
-        """Generate a test Peep with random values"""
-        data = {
-            "id": id,
-            "index": index,
-            "name": f"Person{id}",
-            "email": f"person{id}@example.com",
-            "priority": random.randint(0, 3),  # Priority between 0 and 3
-            "event_limit": random.randint(1, 3),
-            "role": random.choice([Role.LEADER.value, Role.FOLLOWER.value]),
-            "min_interval_days": random.choice([0, 1, 2, 3]),
-            "total_attended": random.randint(0, 5),
-        }
-
-        # Generate random event availability
-        availability = sorted(random.sample(event_ids, random.randint(1, len(event_ids))))
-        data.update({"availability": availability})
-
-        return cls(**data)
 
     @staticmethod
     def peeps_str(peeps):
@@ -389,13 +344,6 @@ class Event:
             raise RuntimeError(f"Too many {role.value}s assigned")
         return count == self.max_role
 
-    def has_space(self, role: Role):
-        """
-        Return True if the event is not full for the given role.
-        Equivalent to: not is_full(role)
-        """
-        return not self.is_full(role)
-
     def promote_alt(self, peep: Peep, role: Role):
         """
         Promote an alternate to full attendee for the specified role.
@@ -545,34 +493,6 @@ class Event:
         data["date"] = datetime.datetime.strptime(data["date"], DATE_FORMAT)
         return cls(**data)
 
-    @classmethod
-    def generate_test_event(cls, event_id, start_date):
-        """Generate a random test event within one month on allowed days & times."""
-        allowed_days = [2, 4, 5]  # Wednesday (2), Friday (4), Saturday (5)
-        allowed_times = {
-            2: [16, 17, 18, 19],  # Wed: 4-7 PM
-            4: [16, 17, 18, 19],  # Fri: 4-7 PM
-            5: [11, 19],  # Sat: 11 AM, 7 PM
-        }
-
-        # Pick a random day in the next 30 days that matches allowed days
-        valid_days = [
-            start_date + datetime.timedelta(days=i)
-            for i in range(1, 31)
-            if (start_date + datetime.timedelta(days=i)).weekday() in allowed_days
-        ]
-        rand_day = random.choice(valid_days)
-
-        event_hour = random.choice(allowed_times[rand_day.weekday()])
-        event_datetime = datetime.datetime(rand_day.year, rand_day.month, rand_day.day, event_hour)
-
-        return cls(
-            id=event_id,
-            date=event_datetime,
-            min_role=random.randint(3, 5),
-            max_role=random.randint(6, 8),
-        )
-
     def formatted_date(self):
         dt = self.date
         formatted = dt.strftime(DATESTR_FORMAT)
@@ -670,11 +590,7 @@ class EventSequence:
                     ],
                     "leaders_string": event.get_participants_str(Role.LEADER),
                     "followers_string": event.get_participants_str(Role.FOLLOWER),
-                    **(
-                        {"topic": event.topic}
-                        if event.topic is not None
-                        else {}
-                    ),
+                    **({"topic": event.topic} if event.topic is not None else {}),
                 }
                 for event in self.valid_events
             ],

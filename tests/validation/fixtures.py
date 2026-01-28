@@ -118,12 +118,3 @@ def results_data(overrides: dict | None = None) -> dict:
     }
     return {**defaults, **(overrides or {})}
 
-
-def partnerships_json_data(overrides: dict | None = None) -> dict:
-    """Factory for valid partnerships.json file test data."""
-    defaults = {
-        "19": [20],
-        "20": [19],
-        "46": [43, 31],
-    }
-    return {**defaults, **(overrides or {})}
