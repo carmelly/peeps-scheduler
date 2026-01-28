@@ -32,6 +32,7 @@ class BaseEventJsonSchema(BaseModel):
     start_dt: EventDateTime = Field(alias="date")
     duration_minutes: EventDuration = Field(alias="duration_minutes")
     attendees: list[RosterEntryJsonSchema] = Field(alias="attendees")
+    topic: str | None = Field(default=None, alias="topic")
 
     @field_validator("attendees", mode="after")
     @classmethod

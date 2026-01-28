@@ -265,6 +265,8 @@ class Event:
         if self.duration_minutes not in constants.CLASS_CONFIG:
             raise ValueError(f"unknown event duration: {self.duration_minutes}")
 
+        self.topic = kwargs.get("topic")
+
         # Attendee lists are role-specific and managed via internal assignment methods.
         self._leaders = []
         self._followers = []
@@ -729,6 +731,11 @@ class EventSequence:
                     ],
                     "leaders_string": event.get_participants_str(Role.LEADER),
                     "followers_string": event.get_participants_str(Role.FOLLOWER),
+                    **(
+                        {"topic": event.topic}
+                        if event.topic is not None
+                        else {}
+                    ),
                 }
                 for event in self.valid_events
             ],

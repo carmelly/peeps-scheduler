@@ -115,6 +115,13 @@ class PeriodFileSchema(BaseModel):
             self.cancelled_member_availability,
         )
         validate_topics(self.topics)
+        has_response_topics = any(
+            response.deep_dive_topics for response in self.responses.responses
+        )
+        if self.topics and not has_response_topics:
+            raise ValueError("Deep Dive Topics missing from responses.csv")
+        if has_response_topics and not self.topics:
+            raise ValueError("topics missing from period_config.json")
         filter_response_topics(self.responses.responses, self.topics)
         validate_event_references(
             event_starts,

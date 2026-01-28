@@ -248,6 +248,7 @@ def build_attendance_events(
             id=attendance_event.legacy_id,
             date=attendance_event.start_dt,
             duration_minutes=attendance_event.duration_minutes,
+            topic=attendance_event.topic,
         )
         for attendee in attendance_event.attendees:
             peep = peeps_by_id[attendee.id]
@@ -267,6 +268,7 @@ def build_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -
             id=result_event.legacy_id,
             date=result_event.start_dt,
             duration_minutes=result_event.duration_minutes,
+            topic=result_event.topic,
         )
         for attendee in result_event.attendees:
             peep = peeps_by_id[attendee.id]

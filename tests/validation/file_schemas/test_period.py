@@ -153,7 +153,21 @@ class TestPeriodFileSchema:
 
     def test_valid_topics(self, ctx):
         data = period_data(
-            {"topics": ["Balance for Spins and Turns", "Angles for Shaping & Slotting"]}
+            {
+                "topics": ["Balance for Spins and Turns", "Angles for Shaping & Slotting"],
+                "responses": {
+                    "responses": [
+                        response_data(
+                            {
+                                "Name": "Alice Alpha",
+                                "Email Address": "alice@test.com",
+                                "Deep Dive Topics": "Balance for Spins and Turns",
+                            }
+                        ),
+                        response_data({"Name": "Bob Beta", "Email Address": "bob@test.com"}),
+                    ],
+                },
+            }
         )
         schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
         assert schema.topics == ["Balance for Spins and Turns", "Angles for Shaping & Slotting"]
@@ -163,6 +177,54 @@ class TestPeriodFileSchema:
         with pytest.raises(ValidationError) as e:
             PeriodFileSchema.model_validate(data, context={"ctx": ctx})
         assert_error_for_model(e.value.errors(), "topics")
+
+    def test_topics_without_column_raises(self, ctx):
+        data = period_data(
+            {
+                "topics": ["Topic A"],
+                "responses": {
+                    "responses": [response_data()],
+                },
+            }
+        )
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert_error_for_model(e.value.errors(), "Deep Dive Topics missing")
+
+    def test_column_without_topics_raises(self, ctx):
+        data = period_data(
+            {
+                "responses": {
+                    "responses": [response_data({"Deep Dive Topics": "Topic A"})],
+                }
+            }
+        )
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert_error_for_model(e.value.errors(), "topics missing")
+
+    def test_topics_with_column_valid(self, ctx):
+        data = period_data(
+            {
+                "topics": ["Topic A"],
+                "responses": {
+                    "responses": [response_data({"Deep Dive Topics": "Topic A"})],
+                },
+            }
+        )
+        schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert schema.topics == ["Topic A"]
+
+    def test_no_topics_no_column_valid(self, ctx):
+        data = period_data(
+            {
+                "responses": {
+                    "responses": [response_data()],
+                }
+            }
+        )
+        schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+        assert schema.topics == []
 
     def test_results_roster_id_not_found_raises(self, ctx):
         data = period_data(
@@ -644,7 +706,7 @@ class TestFilterResponseTopics:
                         response_data(
                             {"Deep Dive Topics": ("Balance for Spins and Turns, Unknown Topic")}
                         )
-                    ]
+                    ],
                 },
             }
         )
@@ -655,7 +717,7 @@ class TestFilterResponseTopics:
         data = period_data(
             {
                 "topics": [],
-                "responses": {"responses": [response_data({"Deep Dive Topics": "Unknown Topic"})]},
+                "responses": {"responses": [response_data()]},
             }
         )
         schema = PeriodFileSchema.model_validate(data, context={"ctx": ctx})

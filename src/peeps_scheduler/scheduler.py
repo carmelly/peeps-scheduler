@@ -5,6 +5,7 @@ import peeps_scheduler.constants as constants
 from peeps_scheduler import file_io, utils
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
+from peeps_scheduler.topic_assignment import assign_topics_to_events
 from peeps_scheduler.validation.period import PeriodData
 
 
@@ -191,8 +192,7 @@ class Scheduler:
                     shared_peeps = sum(
                         1
                         for peep in peeps
-                        if event_a in peep_event_map[peep.id]
-                        and event_b in peep_event_map[peep.id]
+                        if event_a in peep_event_map[peep.id] and event_b in peep_event_map[peep.id]
                     )
 
                     overlap_scores[event_a.id] += shared_peeps
@@ -276,6 +276,28 @@ class Scheduler:
             and s.one_sided_fulfilled == best_one_sided
         ]
 
+    def _assign_topics(self, sequence: EventSequence) -> None:
+        topics = list(self.period_data.topics)
+        if not topics:
+            return
+
+        # Delegate to the topic assignment module, which scores votes and avoids overlap.
+        assign_topics_to_events(sequence, topics)
+
+    def _save_sequence(
+        self,
+        sequence: EventSequence,
+    ) -> None:
+        data = sequence.to_dict()
+        topic_assignments = {
+            event.id: event.topic for event in sequence.valid_events if event.topic is not None
+        }
+        if topic_assignments:
+            data["topic_assignments"] = topic_assignments
+
+        file_io.save_json(data, str(self.result_json))
+        logging.info(f"Saved event sequence to {self.result_json}")
+
     def apply_results(self):
         """Apply attendance results to peeps, save members_updated.csv, and return updated roster."""
         fresh_peeps = self.period_data.peeps
@@ -305,6 +327,40 @@ class Scheduler:
         file_io.save_peeps_csv(sequence.peeps, output_file)
         logging.info("Updated members.csv ready for Google Sheets upload.")
         return sequence.peeps
+
+    def _select_best_sequence(self, best_sequences):
+        if len(best_sequences) == 1:
+            best_sequence = best_sequences[0]
+            logging.info(f"Auto-selected best sequence: {best_sequence}")
+            return best_sequence
+
+        if self.interactive:
+            print(
+                f"Found {len(best_sequences)} tied top sequences with {best_sequences[0].num_unique_attendees} unique attendees:"
+            )
+            for i, seq in enumerate(best_sequences):
+                print(f"[{i}] {seq}")
+
+            choice = input(
+                f"Enter the index of the sequence to save (0-{len(best_sequences) - 1}): "
+            )
+            try:
+                chosen_index = int(choice)
+                best_sequence = best_sequences[chosen_index]
+                logging.info(f"Selected {best_sequence}")
+                return best_sequence
+            except (ValueError, IndexError):
+                logging.error("Invalid choice. No sequence was saved.")
+                return None
+
+        if self.sequence_choice < len(best_sequences):
+            best_sequence = best_sequences[self.sequence_choice]
+            logging.info(f"Auto-selected tied sequence {self.sequence_choice}: {best_sequence}")
+        else:
+            logging.warning(f"Sequence choice {self.sequence_choice} out of range, selecting first")
+            best_sequence = best_sequences[0]
+            logging.info(f"Auto-selected first tied sequence: {best_sequence}")
+        return best_sequence
 
     def run(self):
         peeps = list(self.period_data.peeps)
@@ -372,48 +428,13 @@ class Scheduler:
             logging.info("No sequence could fill any events.")
             return
 
-        if len(best) == 1:
-            best_sequence = best[0]
-            logging.info(f"Auto-selected best sequence: {best_sequence}")
-            file_io.save_event_sequence(best_sequence, str(self.result_json))
-            logging.debug("Final Peeps:")
-            logging.debug(Peep.peeps_str(best_sequence.peeps))
-            return best_sequence
-        else:
-            if self.interactive:
-                print(
-                    f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:"
-                )
-                for i, seq in enumerate(best):
-                    print(f"[{i}] {seq}")
+        best_sequence = self._select_best_sequence(best)
+        if best_sequence is None:
+            return None
 
-            if self.interactive:
-                choice = input(f"Enter the index of the sequence to save (0-{len(best) - 1}): ")
-                try:
-                    chosen_index = int(choice)
-                    best_sequence = best[chosen_index]
-                    logging.info(f"Selected {best_sequence}")
-                    file_io.save_event_sequence(best_sequence, str(self.result_json))
-                    logging.debug("Final Peeps:")
-                    logging.debug(Peep.peeps_str(best_sequence.peeps))
-                    return best_sequence
-                except (ValueError, IndexError):
-                    logging.error("Invalid choice. No sequence was saved.")
-                    return None
-            else:
-                # In non-interactive mode, auto-select the specified sequence
-                if self.sequence_choice < len(best):
-                    best_sequence = best[self.sequence_choice]
-                    logging.info(
-                        f"Auto-selected tied sequence {self.sequence_choice}: {best_sequence}"
-                    )
-                else:
-                    logging.warning(
-                        f"Sequence choice {self.sequence_choice} out of range, selecting first"
-                    )
-                    best_sequence = best[0]
-                    logging.info(f"Auto-selected first tied sequence: {best_sequence}")
-                file_io.save_event_sequence(best_sequence, str(self.result_json))
-                logging.debug("Final Peeps:")
-                logging.debug(Peep.peeps_str(best_sequence.peeps))
-                return best_sequence
+        if self.period_data.topics:
+            self._assign_topics(best_sequence)
+        self._save_sequence(best_sequence)
+        logging.debug("Final Peeps:")
+        logging.debug(Peep.peeps_str(best_sequence.peeps))
+        return best_sequence

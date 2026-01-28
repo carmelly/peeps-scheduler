@@ -38,7 +38,7 @@ def temp_period_dir(ctx):
         3, Carol Clark   (email: carol@test.com)   Role: Leader
 
     - responses.csv
-      Header: Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days
+      Header: Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days,Deep Dive Topics
       Rows:
         Alice (timestamp 1/1/2020 12:00:00)
           Primary Role: Follower (overrides members.csv role for scheduling)
@@ -96,10 +96,10 @@ def temp_period_dir(ctx):
         # responses.csv with overlapping availability and a separate cancelled event slot
         responses_csv = tmpdir_path / "responses.csv"
         responses_csv.write_text(
-            "Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days\n"
-            "1/1/2020 12:00:00,Alice Alpha,Alice,alice@test.com,Follower,I only want to be scheduled in my primary role,2,Saturday January 4 - 1pm,0\n"
-            "1/1/2020 12:15:00,Bob Beta,Bob,bob@test.com,Follower,,1,Saturday January 4 - 1pm,0\n"
-            "1/1/2020 12:30:00,Carol Clark,Carol,carol@test.com,Leader,,3,Saturday January 11 - 1pm,0\n"
+            "Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days,Deep Dive Topics\n"
+            "1/1/2020 12:00:00,Alice Alpha,Alice,alice@test.com,Follower,I only want to be scheduled in my primary role,2,Saturday January 4 - 1pm,0,Balance for Spins and Turns\n"
+            "1/1/2020 12:15:00,Bob Beta,Bob,bob@test.com,Follower,,1,Saturday January 4 - 1pm,0,\n"
+            "1/1/2020 12:30:00,Carol Clark,Carol,carol@test.com,Leader,,3,Saturday January 11 - 1pm,0,\n"
         )
 
         # consolidated period_config.json with cancellations and partnership requests
@@ -367,6 +367,14 @@ class TestLoadAndValidatePeriod:
         """Edge case: Missing optional period_config.json is handled gracefully."""
         period_config_file = temp_period_dir / "period_config.json"
         period_config_file.unlink()
+
+        responses_csv = temp_period_dir / "responses.csv"
+        responses_csv.write_text(
+            "Timestamp,Name,Display Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availability,Min Interval Days\n"
+            "1/1/2020 12:00:00,Alice Alpha,Alice,alice@test.com,Follower,I only want to be scheduled in my primary role,2,Saturday January 4 - 1pm,0\n"
+            "1/1/2020 12:15:00,Bob Beta,Bob,bob@test.com,Follower,,1,Saturday January 4 - 1pm,0\n"
+            "1/1/2020 12:30:00,Carol Clark,Carol,carol@test.com,Leader,,3,Saturday January 11 - 1pm,0\n"
+        )
 
         period_data = load_and_validate_period(str(temp_period_dir), 2020)
 
