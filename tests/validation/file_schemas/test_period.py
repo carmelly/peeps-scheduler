@@ -12,10 +12,11 @@ from peeps_scheduler.validation.file_schemas.period import (
     validate_cancellations,
     validate_event_references,
     validate_partnerships,
-    validate_response_emails,
+    validate_response_members,
     validate_roster_entries,
     validate_topics,
 )
+from peeps_scheduler.validation.file_schemas.responses_csv import ResponseCsvRowSchema
 from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.parsers import parse_event_name
 from tests.validation.conftest import assert_error_for_model
@@ -150,6 +151,47 @@ class TestPeriodFileSchema:
             PeriodFileSchema.model_validate(data, context={"ctx": ctx})
 
         assert_error_for_model(e.value.errors(), "response email")
+
+    def test_response_from_inactive_member_raises(self, ctx):
+        data = period_data(
+            {
+                "members": [
+                    member_data(
+                        {
+                            "id": "1",
+                            "Index": "0",
+                            "Name": "Alice Alpha",
+                            "Display Name": "Alice",
+                            "Email Address": "alice@test.com",
+                            "Active": "TRUE",
+                        }
+                    ),
+                    member_data(
+                        {
+                            "id": "2",
+                            "Index": "1",
+                            "Name": "Inactive Gamma",
+                            "Display Name": "Gamma",
+                            "Email Address": "gamma@test.com",
+                            "Active": "FALSE",
+                        }
+                    ),
+                ],
+                "responses": {
+                    "responses": [
+                        response_data({"Name": "Alice Alpha", "Email Address": "alice@test.com"}),
+                        response_data(
+                            {"Name": "Inactive Gamma", "Email Address": "gamma@test.com"}
+                        ),
+                    ],
+                },
+            }
+        )
+
+        with pytest.raises(ValidationError) as e:
+            PeriodFileSchema.model_validate(data, context={"ctx": ctx})
+
+        assert_error_for_model(e.value.errors(), "response from inactive member")
 
     def test_valid_topics(self, ctx):
         data = period_data(
@@ -543,21 +585,70 @@ class TestPeriodFileSchema:
 
 
 @pytest.mark.unit
-class TestValidateResponseEmails:
-    """Unit tests for validate_response_emails function."""
+class TestValidateResponseMembers:
+    """Unit tests for validate_response_members function."""
 
-    def test_valid(self):
-        """Happy path: All response emails exist in member emails."""
-        member_emails = {"alice@test.com", "bob@test.com"}
-        response_emails = ["alice@test.com", "bob@test.com"]
-        # Should not raise
-        validate_response_emails(member_emails, response_emails)
+    def test_valid(self, ctx):
+        """Happy path: All responses reference active members."""
+        members = [
+            MemberCsvRowSchema.model_validate(member_data()),
+            MemberCsvRowSchema.model_validate(
+                member_data({"id": "2", "Index": "1", "Email Address": "bob@test.com"})
+            ),
+        ]
+        responses = [
+            ResponseCsvRowSchema.model_validate(response_data(), context={"ctx": ctx}),
+            ResponseCsvRowSchema.model_validate(
+                response_data({"Email Address": "bob@test.com", "Name": "Bob Beta"}),
+                context={"ctx": ctx},
+            ),
+        ]
+        validate_response_members(members, responses)
 
-    def test_missing_raises(self):
+    def test_missing_raises(self, ctx):
         """Error case: Response email not in member roster."""
         with pytest.raises(ValueError) as e:
-            validate_response_emails({"alice@test.com"}, ["alice@test.com", "missing@test.com"])
+            members = [MemberCsvRowSchema.model_validate(member_data())]
+            responses = [
+                ResponseCsvRowSchema.model_validate(response_data(), context={"ctx": ctx}),
+                ResponseCsvRowSchema.model_validate(
+                    response_data({"Email Address": "missing@test.com", "Name": "Zoe Zeta"}),
+                    context={"ctx": ctx},
+                ),
+            ]
+            validate_response_members(members, responses)
         assert "response email not found" in str(e.value)
+
+    def test_inactive_member_raises(self, ctx):
+        """Error case: Response from inactive member."""
+        members = [
+            MemberCsvRowSchema.model_validate(member_data()),
+            MemberCsvRowSchema.model_validate(
+                member_data(
+                    {
+                        "id": "2",
+                        "Index": "1",
+                        "Email Address": "gamma@test.com",
+                        "Name": "Inactive Gamma",
+                        "Display Name": "Gamma",
+                        "Active": "FALSE",
+                    }
+                )
+            ),
+        ]
+        responses = [
+            ResponseCsvRowSchema.model_validate(response_data(), context={"ctx": ctx}),
+            ResponseCsvRowSchema.model_validate(
+                response_data(
+                    {"Email Address": "gamma@test.com", "Name": "Inactive Gamma"}
+                ),
+                context={"ctx": ctx},
+            ),
+        ]
+
+        with pytest.raises(ValueError) as e:
+            validate_response_members(members, responses)
+        assert "response from inactive member" in str(e.value)
 
 
 @pytest.mark.unit

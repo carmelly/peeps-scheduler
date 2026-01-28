@@ -9,7 +9,10 @@ from peeps_scheduler.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.responses_csv import ResponsesCsvFileSchema
+from peeps_scheduler.validation.file_schemas.responses_csv import (
+    ResponseCsvRowSchema,
+    ResponsesCsvFileSchema,
+)
 from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.validation.helpers import normalize_email_for_match
 from peeps_scheduler.validation.parsers import EventSpec
@@ -81,11 +84,7 @@ class PeriodFileSchema(BaseModel):
         member_rows = self.members.root
         member_by_id = {row.id: row for row in member_rows}
         member_emails = {normalize_email_for_match(row.email_address) for row in member_rows}
-
-        response_emails = [
-            normalize_email_for_match(row.email_address) for row in self.responses.responses
-        ]
-        validate_response_emails(member_emails, response_emails)
+        validate_response_members(member_rows, self.responses.responses)
 
         member_availability_by_email = {
             normalize_email_for_match(row.email_address): row.availability
@@ -132,11 +131,30 @@ class PeriodFileSchema(BaseModel):
         return self
 
 
-def validate_response_emails(member_emails: set[str], response_emails: list[str]) -> None:
-    """Ensure response emails exist in the member roster."""
-    missing_responses = [email for email in response_emails if email not in member_emails]
-    if missing_responses:
-        raise ValueError(f"response email not found: {sorted(set(missing_responses))}")
+def validate_response_members(
+    member_rows: list[MemberCsvRowSchema],
+    responses: list[ResponseCsvRowSchema],
+) -> None:
+    """Ensure responses reference active members in the roster."""
+    member_by_email = {
+        normalize_email_for_match(row.email_address): row for row in member_rows
+    }
+    missing_emails: list[str] = []
+    inactive_names: list[str] = []
+
+    for response in responses:
+        normalized = normalize_email_for_match(response.email_address)
+        member = member_by_email.get(normalized)
+        if not member:
+            missing_emails.append(response.email_address)
+            continue
+        if not member.active:
+            inactive_names.append(response.full_name)
+
+    if missing_emails:
+        raise ValueError(f"response email not found: {sorted(set(missing_emails))}")
+    if inactive_names:
+        raise ValueError(f"response from inactive member: {sorted(set(inactive_names))}")
 
 
 def validate_roster_entries(
