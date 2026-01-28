@@ -84,3 +84,11 @@ class MembersCsvFileSchema(RootModel[list[MemberCsvRowSchema]]):
             if row.active and row.email_address is None:
                 raise ValueError("active members must have an email address")
         return self
+
+    @model_validator(mode="after")
+    def validate_priority_order(self):
+        rows = sorted(self.root, key=lambda row: row.index)
+        priorities = [row.priority for row in rows]
+        if priorities != sorted(priorities, reverse=True):
+            raise ValueError("priority order must be non-increasing by index")
+        return self

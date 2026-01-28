@@ -211,7 +211,7 @@ def members_csv_content():
     """Standard members CSV content with current format."""
     return """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
 1,John Doe,John D.,john@example.com,Leader,0,5,2,TRUE,1/1/2020
-2,Jane Smith,Jane S.,jane@example.com,Follower,1,3,1,TRUE,1/2/2020
+2,Jane Smith,Jane S.,jane@example.com,Follower,1,4,1,TRUE,1/2/2020
 3,Bob Wilson,Bob W.,bob@example.com,Leader,2,4,0,TRUE,1/3/2020
 4,Alice Brown,Alice B.,alice@example.com,Follower,3,2,1,TRUE,1/4/2020"""
 

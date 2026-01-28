@@ -184,3 +184,32 @@ class TestMembersCsvFileSchema:
         )
         assert len(schema.root) == 1
         assert schema.root[0].active is False
+
+    def test_priority_order_mismatch_raises(self, ctx):
+        """Error case: priority must be non-increasing by index order."""
+        with pytest.raises(ValidationError) as e:
+            MembersCsvFileSchema.model_validate(
+                [
+                    member_data(
+                        {
+                            "id": "1",
+                            "Index": "0",
+                            "Priority": "1",
+                            "Email Address": "alice@test.com",
+                        }
+                    ),
+                    member_data(
+                        {
+                            "id": "2",
+                            "Index": "1",
+                            "Priority": "2",
+                            "Email Address": "bob@test.com",
+                            "Name": "Bob Beta",
+                            "Display Name": "Bob",
+                        }
+                    ),
+                ],
+                context={"ctx": ctx},
+            )
+
+        assert_error_for_model(e.value.errors(), "priority order")
