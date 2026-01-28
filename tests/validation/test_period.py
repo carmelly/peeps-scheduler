@@ -132,7 +132,7 @@ def temp_period_dir(ctx):
 class TestPeriodSchemaIntegration:
     """Integration tests for complete PeriodFileSchema workflow."""
 
-    def tests_load_and_validate_period_returns_period_data(self, ctx, temp_period_dir):
+    def test_load_and_validate_period_returns_period_data(self, ctx, temp_period_dir):
         """Integration: load_and_validate_period() uses PeriodFileSchema.model_validate()."""
         period_data = load_and_validate_period(str(temp_period_dir), 2020)
 
