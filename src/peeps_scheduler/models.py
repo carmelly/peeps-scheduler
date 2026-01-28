@@ -62,34 +62,6 @@ class Peep:
     def name(self):
         return self.display_name
 
-    def to_dict(self):
-        peep_dict = {
-            "id": self.id,
-            "name": self.full_name,
-            "display_name": self.display_name,
-            "email": self.email,
-            "role": self.role.value,
-            "index": self.index,
-            "priority": self.priority,
-            "total_attended": self.total_attended,
-            "active": self.active,
-            "date_joined": self.date_joined,
-        }
-        if self.responded:
-            availability = [
-                event.id if isinstance(event, Event) else event for event in self.availability
-            ]
-            peep_dict.update(
-                {
-                    "availability": availability,
-                    "switch_pref": self.switch_pref.value,
-                    "responded": self.responded,
-                    "event_limit": self.event_limit,
-                    "min_interval_days": self.min_interval_days,
-                }
-            )
-        return peep_dict
-
     def can_attend(self, event):
         """Checks if a peep can attend an event based on peep availability, event limit, and interval.
         Does not take into account role limit, so that we can add this peep as an alternate if needed"""
@@ -588,7 +560,6 @@ class EventSequence:
                 }
                 for event in self.valid_events
             ],
-            "peeps": [peep.to_dict() for peep in self.peeps],
             "num_unique_attendees": self.num_unique_attendees,
             "priority_fulfilled": self.priority_fulfilled,
             "partnerships_fulfilled": self.partnerships_fulfilled,

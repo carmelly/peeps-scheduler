@@ -467,7 +467,6 @@ class TestEventSequenceDataConversion:
 
         # Should include key serialization fields
         assert "valid_events" in data
-        assert "peeps" in data
         assert "num_unique_attendees" in data
         assert "system_weight" in data
         assert "partnerships_fulfilled" in data
@@ -510,7 +509,6 @@ class TestEventSequenceDataConversion:
         data = sequence.to_dict()
 
         assert data["valid_events"] == []
-        assert data["peeps"] == []
         assert data["num_unique_attendees"] == 0
         assert data["system_weight"] == 0
         assert data["partnerships_fulfilled"] == 0
