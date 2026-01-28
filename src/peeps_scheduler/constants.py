@@ -1,4 +1,3 @@
-import os
 from zoneinfo import ZoneInfo
 
 DATE_FORMAT = "%Y-%m-%d %H:%M"
@@ -24,13 +23,8 @@ ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 DEFAULT_EVENT_DURATION = 120  # minutes
 DEFAULT_MAX_EVENTS = 7
 
-# === Data Management Configuration ===
-
-# Private data submodule root - can be overridden by environment
-PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps-data")
-
-# Optional data files
-PARTNERSHIPS_FILE = "partnerships.json"
+# Path to private data submodule (relative to project root)
+PRIVATE_DATA_ROOT = "peeps-data"
 
 # Default timezone
 DEFAULT_TIMEZONE = ZoneInfo("America/Los_Angeles")

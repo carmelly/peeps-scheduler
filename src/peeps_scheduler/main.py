@@ -86,12 +86,6 @@ def main():
         required=(default_data_folder is None),
         help="Path to data folder",
     )
-    availability_parser.add_argument(
-        "--cancellations-file",
-        type=str,
-        default="cancellations.json",
-        help="Filename of cancellations JSON (default: cancellations.json)",
-    )
 
     # Pretty results command
     pretty_results_parser = subparsers.add_parser(
@@ -140,7 +134,7 @@ def main():
     elif args.command == "availability-report":
         from peeps_scheduler.availability_report import run_availability_report
 
-        run_availability_report(args.data_folder, cancellations_file=args.cancellations_file)
+        run_availability_report(args.data_folder)
     elif args.command == "pretty-results":
         utils.print_results_summary(args.period_folder, results_filename=args.results_file)
     else:

@@ -18,76 +18,30 @@ class Role(Enum):
             return Role.LEADER
         raise ValueError(f"no opposite defined for role: {self}")
 
-    @classmethod
-    def from_string(cls, value):
-        value = value.strip().lower()
-        if value in ["lead", "leader"]:
-            return cls.LEADER
-        elif value in ["follow", "follower"]:
-            return cls.FOLLOWER
-        else:
-            raise ValueError(f"unknown role: {value}")
-
 
 class SwitchPreference(Enum):
     PRIMARY_ONLY = 1  # "I only want to be scheduled in my primary role"
     SWITCH_IF_PRIMARY_FULL = 2  # "Happy to dance secondary if primary is full"
     SWITCH_IF_NEEDED = 3  # "Only if needed to fill a session"
 
-    @classmethod
-    def from_string(cls, value):
-        value = value.strip()
-        if value == "I only want to be scheduled in my primary role":
-            return cls.PRIMARY_ONLY
-        elif (
-            value
-            == "I'm happy to dance my secondary role if it lets me attend when my primary is full"
-        ):
-            return cls.SWITCH_IF_PRIMARY_FULL
-        elif (
-            value
-            == "I'm willing to dance my secondary role only if it's needed to enable filling a session"
-        ):
-            return cls.SWITCH_IF_NEEDED
-        else:
-            raise ValueError(f"unknown role: {value}")
-
 
 class Peep:
     def __init__(self, **kwargs):
-        # Validate required fields first
-        if not kwargs.get("id"):
-            raise ValueError("peep requires an 'id' field")
+        self.id = kwargs.get("id")
+        self.full_name = kwargs.get("full_name", "")
+        self.display_name = kwargs.get("display_name", "")
+        self.email = kwargs.get("email", "")
+        self.role = kwargs.get("role")
+        self.switch_pref = kwargs.get("switch_pref") or SwitchPreference.PRIMARY_ONLY
 
-        if not kwargs.get("role"):
-            raise ValueError("peep requires a 'role' field")
-
-        self.id = int(kwargs.get("id"))
-        self.full_name = str(kwargs.get("full_name", "")).strip()
-        self.display_name = str(kwargs.get("display_name", "")).strip()
-        self.email = str(kwargs.get("email", "")).strip()
-
-        role_input = kwargs.get("role", "")
-        try:
-            self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
-        except ValueError as e:
-            raise ValueError(f"invalid role '{role_input}': {e!s}") from e
-
-        switch_input = kwargs.get("switch_pref") or SwitchPreference.PRIMARY_ONLY
-        self.switch_pref = (
-            switch_input
-            if isinstance(switch_input, SwitchPreference)
-            else SwitchPreference(switch_input)
-        )
-
-        self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
-        self.priority = int(kwargs.get("priority", 0) or 0)
+        self.index = kwargs.get("index", 0)
+        self.priority = kwargs.get("priority", 0)
         self.original_priority = self.priority
-        self.total_attended = int(kwargs.get("total_attended", 0) or 0)
-        self.availability = list(kwargs.get("availability", []))  # Ensure list format
-        self.event_limit = int(kwargs.get("event_limit", 0) or 0)
+        self.total_attended = kwargs.get("total_attended", 0)
+        self.availability = kwargs.get("availability", [])
+        self.event_limit = kwargs.get("event_limit", 0)
         self.num_events = 0  # always start at 0, gets incremented during the run
-        self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
+        self.min_interval_days = kwargs.get("min_interval_days", 0)
         self.assigned_event_dates = []
         self.topic_votes = kwargs.get("topic_votes") or []
         # keep these as strings, just to print back to updated members csv
@@ -98,21 +52,6 @@ class Peep:
     @staticmethod
     def is_peeps_list_sorted_by_priority(peeps: list["Peep"]):
         return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps) - 1))
-
-    @staticmethod
-    def from_csv(row: dict) -> "Peep":
-        return Peep(
-            id=int(row["id"]),
-            full_name=row["Name"].strip(),
-            display_name=row["Display Name"].strip(),
-            email=row["Email Address"].strip(),
-            role=row["Role"].strip(),
-            index=int(row["Index"]),
-            priority=int(row["Priority"]),
-            total_attended=int(row["Total Attended"]),
-            active=row["Active"].strip().upper() == "TRUE",
-            date_joined=row["Date Joined"],
-        )
 
     def to_csv(self) -> dict:
         return {
