@@ -119,7 +119,7 @@ def main():
 
         try:
             period_data = load_and_validate_period(str(period_path), year)
-        except FileValidationError as exc:
+        except (FileValidationError, FileNotFoundError) as exc:
             logging.error(str(exc))
             sys.exit(1)
 
