@@ -1,7 +1,6 @@
 import datetime
-import itertools
 import logging
-import random
+from dataclasses import dataclass
 from enum import Enum
 import peeps_scheduler.constants as constants
 from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
@@ -12,21 +11,7 @@ class Role(Enum):
     FOLLOWER = "follower"
 
     def opposite(self):
-        if self == Role.LEADER:
-            return Role.FOLLOWER
-        elif self == Role.FOLLOWER:
-            return Role.LEADER
-        raise ValueError(f"no opposite defined for role: {self}")
-
-    @classmethod
-    def from_string(cls, value):
-        value = value.strip().lower()
-        if value in ["lead", "leader"]:
-            return cls.LEADER
-        elif value in ["follow", "follower"]:
-            return cls.FOLLOWER
-        else:
-            raise ValueError(f"unknown role: {value}")
+        return Role.FOLLOWER if self == Role.LEADER else Role.LEADER
 
 
 class SwitchPreference(Enum):
@@ -34,84 +19,30 @@ class SwitchPreference(Enum):
     SWITCH_IF_PRIMARY_FULL = 2  # "Happy to dance secondary if primary is full"
     SWITCH_IF_NEEDED = 3  # "Only if needed to fill a session"
 
-    @classmethod
-    def from_string(cls, value):
-        value = value.strip()
-        if value == "I only want to be scheduled in my primary role":
-            return cls.PRIMARY_ONLY
-        elif (
-            value
-            == "I'm happy to dance my secondary role if it lets me attend when my primary is full"
-        ):
-            return cls.SWITCH_IF_PRIMARY_FULL
-        elif (
-            value
-            == "I'm willing to dance my secondary role only if it's needed to enable filling a session"
-        ):
-            return cls.SWITCH_IF_NEEDED
-        else:
-            raise ValueError(f"unknown role: {value}")
-
 
 class Peep:
     def __init__(self, **kwargs):
-        # Validate required fields first
-        if not kwargs.get("id"):
-            raise ValueError("peep requires an 'id' field")
+        self.id = kwargs.get("id")
+        self.full_name = kwargs.get("full_name", "")
+        self.display_name = kwargs.get("display_name", "")
+        self.email = kwargs.get("email", "")
+        self.role = kwargs.get("role")
+        self.switch_pref = kwargs.get("switch_pref") or SwitchPreference.PRIMARY_ONLY
 
-        if not kwargs.get("role"):
-            raise ValueError("peep requires a 'role' field")
-
-        self.id = int(kwargs.get("id"))
-        self.full_name = str(kwargs.get("full_name", "")).strip()
-        self.display_name = str(kwargs.get("display_name", "")).strip()
-        self.email = str(kwargs.get("email", "")).strip()
-
-        role_input = kwargs.get("role", "")
-        try:
-            self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
-        except ValueError as e:
-            raise ValueError(f"invalid role '{role_input}': {e!s}") from e
-
-        switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
-        self.switch_pref = (
-            switch_input
-            if isinstance(switch_input, SwitchPreference)
-            else SwitchPreference(switch_input)
-        )
-
-        self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
-        self.priority = int(kwargs.get("priority", 0) or 0)
+        self.index = kwargs.get("index", 0)
+        self.priority = kwargs.get("priority", 0)
         self.original_priority = self.priority
-        self.total_attended = int(kwargs.get("total_attended", 0) or 0)
-        self.availability = list(kwargs.get("availability", []))  # Ensure list format
-        self.event_limit = int(kwargs.get("event_limit", 0) or 0)
+        self.total_attended = kwargs.get("total_attended", 0)
+        self.availability = kwargs.get("availability", [])
+        self.event_limit = kwargs.get("event_limit", 0)
         self.num_events = 0  # always start at 0, gets incremented during the run
-        self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
+        self.min_interval_days = kwargs.get("min_interval_days", 0)
         self.assigned_event_dates = []
+        self.topic_votes = kwargs.get("topic_votes") or []
         # keep these as strings, just to print back to updated members csv
         self.active = kwargs.get("active")
         self.date_joined = kwargs.get("date_joined")
         self.responded = kwargs.get("responded", False)
-
-    @staticmethod
-    def is_peeps_list_sorted_by_priority(peeps: list["Peep"]):
-        return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps) - 1))
-
-    @staticmethod
-    def from_csv(row: dict) -> "Peep":
-        return Peep(
-            id=int(row["id"]),
-            full_name=row["Name"].strip(),
-            display_name=row["Display Name"].strip(),
-            email=row["Email Address"].strip(),
-            role=row["Role"].strip(),
-            index=int(row["Index"]),
-            priority=int(row["Priority"]),
-            total_attended=int(row["Total Attended"]),
-            active=row["Active"].strip().upper() == "TRUE",
-            date_joined=row["Date Joined"],
-        )
 
     def to_csv(self) -> dict:
         return {
@@ -131,36 +62,11 @@ class Peep:
     def name(self):
         return self.display_name
 
-    def to_dict(self):
-        peep_dict = {
-            "id": self.id,
-            "name": self.full_name,
-            "display_name": self.display_name,
-            "email": self.email,
-            "role": self.role.value,
-            "index": self.index,
-            "priority": self.priority,
-            "total_attended": self.total_attended,
-            "active": self.active,
-            "date_joined": self.date_joined,
-        }
-        if self.responded:
-            peep_dict.update(
-                {
-                    "availability": self.availability,
-                    "switch_pref": self.switch_pref.value,
-                    "responded": self.responded,
-                    "event_limit": self.event_limit,
-                    "min_interval_days": self.min_interval_days,
-                }
-            )
-        return peep_dict
-
     def can_attend(self, event):
         """Checks if a peep can attend an event based on peep availability, event limit, and interval.
         Does not take into account role limit, so that we can add this peep as an alternate if needed"""
         # meets the person's availability
-        if event.id not in self.availability:
+        if event not in self.availability:
             return False
 
         # personal limit for the month
@@ -176,25 +82,6 @@ class Peep:
         return True
 
     @staticmethod
-    def find_matching_peep(peeps, name, email):
-        matched_peeps = []
-        if email:
-            matched_peeps = [
-                peep for peep in peeps.values() if peep.get("email", "").lower() == email.lower()
-            ]
-
-        if not matched_peeps:
-            logging.error(f"No matching peeps for {name} ({email}). Please check input data.")
-            return None
-        elif len(matched_peeps) > 1:
-            logging.error(
-                f"More than one matching peep for {name} ({email}). Please check input data."
-            )
-            return None
-
-        return matched_peeps[0]
-
-    @staticmethod
     def update_event_attendees(peeps, event):
         """For all successful attendees, reset priority and send to the back of the line."""
         for peep in event.attendees:
@@ -205,27 +92,6 @@ class Peep:
             # Move successful peeps to the end of the list
             peeps.remove(peep)
             peeps.append(peep)
-
-    @classmethod
-    def generate_test_peep(cls, id, index, event_ids):
-        """Generate a test Peep with random values"""
-        data = {
-            "id": id,
-            "index": index,
-            "name": f"Person{id}",
-            "email": f"person{id}@example.com",
-            "priority": random.randint(0, 3),  # Priority between 0 and 3
-            "event_limit": random.randint(1, 3),
-            "role": random.choice([Role.LEADER.value, Role.FOLLOWER.value]),
-            "min_interval_days": random.choice([0, 1, 2, 3]),
-            "total_attended": random.randint(0, 5),
-        }
-
-        # Generate random event availability
-        availability = sorted(random.sample(event_ids, random.randint(1, len(event_ids))))
-        data.update({"availability": availability})
-
-        return cls(**data)
 
     @staticmethod
     def peeps_str(peeps):
@@ -254,12 +120,12 @@ class Peep:
 
 class Event:
     def __init__(self, **kwargs):
-        self.id = kwargs.get("id", 0)
+        self._id = kwargs.get("id", 0)
         self.date = kwargs.get("date")  # TODO: validate that this is a datetime
 
-        self.duration_minutes = kwargs.get("duration_minutes")
-        if self.duration_minutes not in constants.CLASS_CONFIG:
-            raise ValueError(f"unknown event duration: {self.duration_minutes}")
+        self.duration_minutes = kwargs.get("duration_minutes") or constants.DEFAULT_EVENT_DURATION
+
+        self.topic = kwargs.get("topic")
 
         # Attendee lists are role-specific and managed via internal assignment methods.
         self._leaders = []
@@ -267,6 +133,22 @@ class Event:
         self._alt_leaders = []
         self._alt_followers = []
         self._attendee_order = []  # keep track of assignment order
+
+    @property
+    def id(self):
+        return self._id
+
+    @id.setter
+    def id(self, _value):
+        raise AttributeError("event id is immutable")
+
+    def __eq__(self, other):
+        if isinstance(other, Event):
+            return self.id == other.id
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.id)
 
     @property
     def config(self):
@@ -428,13 +310,6 @@ class Event:
             raise RuntimeError(f"Too many {role.value}s assigned")
         return count == self.max_role
 
-    def has_space(self, role: Role):
-        """
-        Return True if the event is not full for the given role.
-        Equivalent to: not is_full(role)
-        """
-        return not self.is_full(role)
-
     def promote_alt(self, peep: Peep, role: Role):
         """
         Promote an alternate to full attendee for the specified role.
@@ -584,34 +459,6 @@ class Event:
         data["date"] = datetime.datetime.strptime(data["date"], DATE_FORMAT)
         return cls(**data)
 
-    @classmethod
-    def generate_test_event(cls, event_id, start_date):
-        """Generate a random test event within one month on allowed days & times."""
-        allowed_days = [2, 4, 5]  # Wednesday (2), Friday (4), Saturday (5)
-        allowed_times = {
-            2: [16, 17, 18, 19],  # Wed: 4-7 PM
-            4: [16, 17, 18, 19],  # Fri: 4-7 PM
-            5: [11, 19],  # Sat: 11 AM, 7 PM
-        }
-
-        # Pick a random day in the next 30 days that matches allowed days
-        valid_days = [
-            start_date + datetime.timedelta(days=i)
-            for i in range(1, 31)
-            if (start_date + datetime.timedelta(days=i)).weekday() in allowed_days
-        ]
-        rand_day = random.choice(valid_days)
-
-        event_hour = random.choice(allowed_times[rand_day.weekday()])
-        event_datetime = datetime.datetime(rand_day.year, rand_day.month, rand_day.day, event_hour)
-
-        return cls(
-            id=event_id,
-            date=event_datetime,
-            min_role=random.randint(3, 5),
-            max_role=random.randint(6, 8),
-        )
-
     def formatted_date(self):
         dt = self.date
         formatted = dt.strftime(DATESTR_FORMAT)
@@ -702,16 +549,17 @@ class EventSequence:
                     "alternates": [
                         {"id": peep.id, "name": peep.name, "role": Role.LEADER.value}
                         for peep in event.alt_leaders
-                    ] + [
+                    ]
+                    + [
                         {"id": peep.id, "name": peep.name, "role": Role.FOLLOWER.value}
                         for peep in event.alt_followers
                     ],
                     "leaders_string": event.get_participants_str(Role.LEADER),
                     "followers_string": event.get_participants_str(Role.FOLLOWER),
+                    **({"topic": event.topic} if event.topic is not None else {}),
                 }
                 for event in self.valid_events
             ],
-            "peeps": [peep.to_dict() for peep in self.peeps],
             "num_unique_attendees": self.num_unique_attendees,
             "priority_fulfilled": self.priority_fulfilled,
             "partnerships_fulfilled": self.partnerships_fulfilled,
@@ -768,35 +616,34 @@ class EventSequence:
         if not partnership_requests:
             return
 
-        mutual_pairs = set()
-        one_sided_requests = set()
-
-        for requester_id, partner_ids in partnership_requests.items():
-            for partner_id in partner_ids:
-                if (
-                    partner_id in partnership_requests
-                    and requester_id in partnership_requests[partner_id]
-                ):
-                    pair = tuple(sorted((requester_id, partner_id)))
-                    mutual_pairs.add(pair)
-                else:
-                    one_sided_requests.add((requester_id, partner_id))
+        # Flatten requests into (requester_id, target_id) pairs for fast membership checks.
+        requested_pairs = {
+            (request.requester.id, target.id)
+            for request in partnership_requests
+            for target in request.target_peeps
+        }
+        # Mutual pairs exist when both directions were requested (A->B and B->A).
+        mutual_pairs = {
+            tuple(sorted(pair)) for pair in requested_pairs if (pair[1], pair[0]) in requested_pairs
+        }
+        # One-sided requests are pairs with no corresponding reverse request.
+        one_sided_requests = {
+            pair for pair in requested_pairs if (pair[1], pair[0]) not in requested_pairs
+        }
 
         mutual_occurrences = {}
         one_sided_satisfied = set()
 
+        # Scan each scheduled event to count fulfilled mutual pairs and satisfied one-sided requests.
         for event in self.valid_events:
             attendee_ids = {peep.id for peep in event.attendees}
             if not attendee_ids:
                 continue
 
             if mutual_pairs:
-                for pair in itertools.combinations(attendee_ids, 2):
-                    normalized_pair = tuple(sorted(pair))
-                    if normalized_pair in mutual_pairs:
-                        mutual_occurrences[normalized_pair] = (
-                            mutual_occurrences.get(normalized_pair, 0) + 1
-                        )
+                for pair in mutual_pairs:
+                    if pair[0] in attendee_ids and pair[1] in attendee_ids:
+                        mutual_occurrences[pair] = mutual_occurrences.get(pair, 0) + 1
 
             if one_sided_requests:
                 for requester_id, partner_id in one_sided_requests:
@@ -804,9 +651,12 @@ class EventSequence:
                         one_sided_satisfied.add((requester_id, partner_id))
 
         self.mutual_unique_fulfilled = len(mutual_occurrences)
-        self.mutual_repeat_fulfilled = sum(
-            count - 1 for count in mutual_occurrences.values() if count > 1
-        )
+        # Each extra occurrence beyond the first counts as a repeat.
+        repeat_fulfilled = 0
+        for count in mutual_occurrences.values():
+            if count > 1:
+                repeat_fulfilled += count - 1
+        self.mutual_repeat_fulfilled = repeat_fulfilled
         self.one_sided_fulfilled = len(one_sided_satisfied)
         self.partnerships_fulfilled = self.mutual_unique_fulfilled + self.one_sided_fulfilled
 
@@ -878,3 +728,19 @@ class EventSequence:
         result += f"\n\tUnscheduled Peeps ({len(unassigned)}): {', '.join(sorted(unassigned)) if unassigned else 'None'}"
 
         return result
+
+
+@dataclass
+class CancelledMemberAvailability:
+    """Member unavailable for specific events during a period."""
+
+    peep: Peep
+    events: list[Event]
+
+
+@dataclass
+class PartnershipRequest:
+    """Request for peep to dance with specific target peeps."""
+
+    requester: Peep
+    target_peeps: list[Peep]

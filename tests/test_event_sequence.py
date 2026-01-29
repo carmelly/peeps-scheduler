@@ -8,7 +8,7 @@ Following testing philosophy:
 - Skip complex scheduling integration scenarios
 """
 
-from peeps_scheduler.models import EventSequence, Role
+from peeps_scheduler.models import EventSequence, PartnershipRequest, Role
 
 
 class TestEventSequenceInitialization:
@@ -467,7 +467,6 @@ class TestEventSequenceDataConversion:
 
         # Should include key serialization fields
         assert "valid_events" in data
-        assert "peeps" in data
         assert "num_unique_attendees" in data
         assert "system_weight" in data
         assert "partnerships_fulfilled" in data
@@ -510,7 +509,6 @@ class TestEventSequenceDataConversion:
         data = sequence.to_dict()
 
         assert data["valid_events"] == []
-        assert data["peeps"] == []
         assert data["num_unique_attendees"] == 0
         assert data["system_weight"] == 0
         assert data["partnerships_fulfilled"] == 0
@@ -576,7 +574,10 @@ class TestEventSequencePartnerships:
         sequence = EventSequence([event1, event2, event3], [peep1, peep2, peep3])
         sequence.valid_events = [event1, event2, event3]
 
-        partnership_requests = {1: {2, 3}, 2: {1}}
+        partnership_requests = [
+            PartnershipRequest(requester=peep1, target_peeps=[peep2, peep3]),
+            PartnershipRequest(requester=peep2, target_peeps=[peep1]),
+        ]
 
         sequence.calculate_partnerships_fulfilled(partnership_requests)
 

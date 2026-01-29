@@ -8,7 +8,7 @@ version = "1.1.0"
 description = "West Coast Swing scheduling system"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic>=2.0.0",
+  "pydantic[email]>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +17,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "coverage>=7.13.0",
     "ruff>=0.14.0",
+    "vulture>=2.11"
 ]
 
 [tool.setuptools.packages.find]
@@ -29,17 +30,21 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-v",
-    "--strict-markers",
-    "--tb=short",
-     "--import-mode=importlib",
+  "-v",
+  "--strict-markers",
+  "--tb=short",
+  "--import-mode=importlib",
+#   "--cov",
+#   "--cov-report=term",
+#   "--cov-report=lcov:lcov.info",
 ]
 markers = [
-    "unit: marks unit tests that test a single component in isolation",
-    "db: marks database tests that require SQLite database",
-    "integration: marks integration tests that test multiple components together",
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "revisit: marks tests that document current behavior but should be changed in the future",
+  "unit: unit tests that test a single component in isolation",
+  "contract: cross-layer boundary tests",
+  "db: database tests that require SQLite database",
+  "integration: integration tests that test multiple components together",
+  "slow: tests that run slow, often integration or e2e (deselect with '-m \"not slow\"')",
+  "revisit: tests that document current behavior but should be changed in the future",
 ]
 
 [tool.ruff]

@@ -7,12 +7,25 @@ from peeps_scheduler.models import Event, Peep, Role, SwitchPreference
 def peep_factory():
     """Factory for creating test peeps with sensible defaults."""
 
+    def _normalize_availability(values):
+        if not values:
+            return []
+        normalized = []
+        for value in values:
+            if isinstance(value, Event):
+                normalized.append(value)
+            else:
+                normalized.append(Event(id=value, date=datetime.datetime(2025, 1, 15, 18, 0)))
+        return normalized
+
     def _create(id=1, role=Role.LEADER, **kwargs):
+        availability = kwargs.pop("availability", None)
+        availability = [] if availability is None else _normalize_availability(availability)
         defaults = {
             "full_name": f"TestPeep{id}",
             "display_name": f"TestPeep{id}",
             "email": f"peep{id}@test.com",
-            "availability": [1],
+            "availability": availability,
             "event_limit": 2,
             "priority": 0,
             "responded": True,

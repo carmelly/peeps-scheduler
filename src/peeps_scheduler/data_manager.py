@@ -4,12 +4,13 @@ Handles path management for private data submodule and period archiving.
 """
 
 from pathlib import Path
+from peeps_scheduler.constants import PRIVATE_DATA_ROOT
 
 
 class DataManager:
     """Manages data paths and period archiving for the scheduling system."""
 
-    def __init__(self, submodule_root: str = "peeps-data"):
+    def __init__(self, submodule_root: str = PRIVATE_DATA_ROOT):
         """
         Initialize DataManager with submodule root path.
 
