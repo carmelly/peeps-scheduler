@@ -35,7 +35,11 @@ from peeps_scheduler.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.validation.file_schemas.period import (
+    CancelledAvailabilityJsonSchema,
+    PartnershipRequestJsonSchema,
+    PeriodFileSchema,
+)
 from peeps_scheduler.validation.file_schemas.responses_csv import (
     EventRowCsvSchema,
     ResponseCsvRowSchema,
@@ -58,7 +62,6 @@ __all__ = [
     "ActualAttendanceJsonSchema",
     "AttendanceEventJsonSchema",
     "CancelledAvailabilityJsonSchema",
-    "CancelledEventJsonSchema",
     "EventRowCsvSchema",
     "FileValidationError",
     "MemberCsvRowSchema",
