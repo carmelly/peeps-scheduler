@@ -29,6 +29,7 @@ from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json impor
     ActualAttendanceJsonSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
+    MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.period import (
@@ -37,6 +38,7 @@ from peeps_scheduler.adapters.file.validation.file_schemas.period import (
     PeriodFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import (
+    ResponseCsvRowSchema,
     ResponsesCsvFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
@@ -102,42 +104,38 @@ class TestMemberToPeep:
         assert peep.responded is False
 
     def test_member_with_response_overrides_role(self, ctx):
-        """Edge case: Response primary_role overrides member role."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data({"Role": "Leader"})]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [response_data({"Primary Role": "Follower"})],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        """Response primary_role overrides member role."""
+        member_schema = MemberCsvRowSchema.model_validate(member_data({"Role": "Leader"}))
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data({"Primary Role": "Follower", "Availability": ""}),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         # Response role should override member role
         assert peep.role == Role.FOLLOWER
 
     def test_member_with_response_adds_availability(self, ctx):
-        """Edge case: Response availability is added to peep."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [
-                    response_data(
-                        {"Availability": "Saturday January 4 - 1pm, Sunday January 5 - 2pm"}
-                    )
-                ],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        """Response availability is added to peep."""
+
+        event1 = Event(
+            id=1, date=datetime.datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz), duration_minutes=90
+        )
+        event2 = Event(
+            id=2, date=datetime.datetime(2020, 1, 5, 14, 0, tzinfo=ctx.tz), duration_minutes=90
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data(
+                {"Availability": ", ".join([event1.formatted_date(), event2.formatted_date()])}
+            ),
+            context={"ctx": ctx},
+        )
+
+        events_by_datetime = {event1.date: event1, event2.date: event2}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert len(peep.availability) == 2
@@ -151,87 +149,65 @@ class TestMemberToPeep:
         assert sorted([event.date for event in peep.availability]) == sorted(expected_dates)
 
     def test_member_with_response_sets_switch_preference(self, ctx):
-        """Edge case: Response secondary_role becomes switch_pref."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [
-                    response_data(
-                        {
-                            "Secondary Role": "I'm willing to dance my secondary role only if it's needed to enable filling a session"
-                        }
-                    )
-                ],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        """Response secondary_role becomes switch_pref."""
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data(
+                {
+                    "Availability": "",
+                    "Secondary Role": "I'm willing to dance my secondary role only if it's needed to enable filling a session",
+                }
+            ),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.switch_pref == SwitchPreference.SWITCH_IF_NEEDED
 
     def test_member_with_response_sets_event_limit(self, ctx):
         """Edge case: Response max_sessions becomes event_limit."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [response_data({"Max Sessions": "4"})],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data({"Availability": "", "Max Sessions": "4"}),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.event_limit == 4
 
     def test_member_with_response_sets_min_interval_days(self, ctx):
         """Edge case: Response min_interval_days is set correctly."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [response_data({"Min Interval Days": "7"})],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data({"Availability": "", "Min Interval Days": "7"}),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.min_interval_days == 7
 
     def test_member_with_response_sets_topic_votes(self, ctx):
         """Edge case: Response deep dive topics become peep topic votes."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [
-                    response_data(
-                        {
-                            "Deep Dive Topics": (
-                                "Balance for Spins and Turns, Angles for Shaping & Slotting"
-                            )
-                        }
-                    )
-                ],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data(
+                {
+                    "Availability": "",
+                    "Deep Dive Topics": (
+                        "Balance for Spins and Turns, Angles for Shaping & Slotting"
+                    ),
+                }
+            ),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.topic_votes == [
@@ -241,18 +217,13 @@ class TestMemberToPeep:
 
     def test_member_with_response_marks_responded(self, ctx):
         """Edge case: responded flag is True when response provided."""
-        member_schemas = MembersCsvFileSchema.model_validate([member_data()]).root
-        member_schema = member_schemas[0]
-        response_ctx = ValidationContext(year=2020, tz=DEFAULT_TIMEZONE)
-        response_schema = ResponsesCsvFileSchema.model_validate(
-            {
-                "responses": [response_data()],
-                "event_rows": None,
-            },
-            context={"ctx": response_ctx},
+        member_schema = MemberCsvRowSchema.model_validate(member_data())
+        response_schema = ResponseCsvRowSchema.model_validate(
+            response_data({"Availability": ""}),
+            context={"ctx": ctx},
         )
 
-        events_by_datetime = _events_by_datetime(response_schema)
+        events_by_datetime = {}
         peep = _member_to_peep(member_schema, response_schema, events_by_datetime)
 
         assert peep.responded is True
@@ -296,10 +267,10 @@ class TestEventSpecToEvent:
 
 
 @pytest.mark.unit
-class TestBuildEvents:
-    """Tests for build_events factory function."""
+class TestMapEvents:
+    """Tests for map_events factory function."""
 
-    def test_build_events_preserves_order_when_event_rows_exist(self):
+    def test_preserves_order_when_event_rows_exist(self):
         """Happy path: preserves event order and assigns sequential IDs."""
         specs = [
             EventSpec(
@@ -319,7 +290,7 @@ class TestBuildEvents:
         assert [event.id for event in events] == [0, 1]
         assert [event.date for event in events] == [specs[0].start, specs[1].start]
 
-    def test_build_events_sorts_by_start_without_event_rows(self):
+    def test_sorts_by_start_without_event_rows(self):
         """Happy path: assigns IDs in chronological order when no event rows exist."""
         specs = [
             EventSpec(
@@ -341,10 +312,10 @@ class TestBuildEvents:
 
 
 @pytest.mark.contract
-class TestBuildPeeps:
-    """Tests for build_peeps extraction function."""
+class TestMapPeeps:
+    """Tests for map_peeps extraction function."""
 
-    def test_builds_members_and_responses_to_peeps(self, ctx):
+    def test_maps_members_and_responses_to_peeps(self, ctx):
         """Happy path: Converts member and response dicts to Peep objects."""
 
         validated_members = MembersCsvFileSchema.model_validate([member_data()]).root
@@ -357,7 +328,6 @@ class TestBuildPeeps:
             context={"ctx": response_ctx},
         )
         events = map_events(validated_responses.events, preserve_order=False)
-
         peeps = map_peeps(validated_members, validated_responses, events)
 
         assert len(peeps) == 1
@@ -376,7 +346,7 @@ class TestBuildPeeps:
         assert len(peeps) == 1
         assert peeps[0].responded is False
 
-    def test_build_peeps_matches_normalized_gmail_addresses(self, ctx):
+    def test_matches_normalized_gmail_addresses(self, ctx):
         """
         Test that convert_to_peeps() correctly matches members and responses
         when Gmail addresses use different dot patterns.
@@ -420,10 +390,10 @@ class TestBuildPeeps:
 
 
 @pytest.mark.contract
-class TestBuildCancelledEvents:
-    """Tests for build_cancelled_events function."""
+class TestMapCancelledEvents:
+    """Tests for map_cancelled_events function."""
 
-    def test_builds_cancelled_events_set(self, event_factory, ctx):
+    def test_maps_cancelled_events_set(self, event_factory, ctx):
         """Happy path: Builds correct set of cancelled event IDs."""
         events = [
             event_factory(id=1, date=datetime.datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)),
@@ -444,8 +414,8 @@ class TestBuildCancelledEvents:
         assert len(cancelled_events) == 1
         assert cancelled_events[0] == events[0]
 
-    def test_builds_empty_set_for_no_cancellations(self, event_factory, ctx):
-        """Edge case: Returns empty set when no cancellations provided."""
+    def test_returns_empty_list_for_no_cancellations(self, event_factory, ctx):
+        """Edge case: Returns empty list when no cancellations provided."""
         events = [
             event_factory(id=1, date=datetime.datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)),
             event_factory(id=2, date=datetime.datetime(2020, 1, 5, 15, 0, tzinfo=ctx.tz)),
@@ -458,10 +428,10 @@ class TestBuildCancelledEvents:
         assert cancelled_events == []
 
 
-class TestBuildCancelledAvailability:
-    """Tests for build_cancelled_availability function."""
+class TestMapCancelledAvailability:
+    """Tests for map_cancelled_availability function."""
 
-    def test_builds_cancelled_availability_mapping(self, peep_factory, event_factory, ctx):
+    def test_maps_cancelled_availability(self, peep_factory, event_factory, ctx):
         """Happy path: Builds correct mapping from CancellationsJsonSchema list."""
         peeps = [
             peep_factory(id=1, email="alice@example.com"),
@@ -500,10 +470,10 @@ class TestBuildCancelledAvailability:
 
 
 @pytest.mark.contract
-class TestBuildPartnerships:
-    """Tests for build_partnerships function."""
+class TestMapPartnerships:
+    """Tests for map_partnerships function."""
 
-    def test_builds_partnerships_mapping(self, peep_factory, ctx):
+    def test_maps_partnerships(self, peep_factory, ctx):
         """Happy path: Builds correct mapping from PartnershipRequest list."""
 
         requests = [
@@ -535,7 +505,7 @@ class TestBuildPartnerships:
         assert partnerships[1].requester == peeps[2]  # Carol
         assert partnerships[1].target_peeps == [peeps[3], peeps[4]]  # Dave, Eve
 
-    def test_builds_empty_partnerships_for_no_requests(self, peep_factory, ctx):
+    def test_returns_empty_list_for_no_requests(self, peep_factory, ctx):
         """Edge case: Returns empty list when no partnership requests provided."""
 
         requests = []
@@ -544,10 +514,10 @@ class TestBuildPartnerships:
         assert partnerships == []
 
 
-class TestBuildAttendanceEvents:
-    """Tests for build_attendance_events function."""
+class TestMapAttendanceEvents:
+    """Tests for map_attendance_events function."""
 
-    def test_builds_attendance_events(self, peep_factory, ctx):
+    def test_maps_attendance_events(self, peep_factory, ctx):
         """Happy path: Builds Event objects with attendee assignments."""
         peeps = [
             peep_factory(id=1, role=Role.LEADER),
@@ -581,10 +551,10 @@ class TestBuildAttendanceEvents:
         assert peeps[1] in event.followers
 
 
-class TestBuildResultsEvents:
-    """Tests for build_results_events function."""
+class TestMapResultsEvents:
+    """Tests for map_results_events function."""
 
-    def test_builds_results_events_with_alternates(self, peep_factory, ctx):
+    def test_maps_results_events_with_alternates(self, peep_factory, ctx):
         """Happy path: Builds Event objects with attendees and alternates."""
         peeps = [
             peep_factory(id=1, role=Role.LEADER),
@@ -652,18 +622,10 @@ class TestMapPeriod:
         assert result.events[0].duration_minutes == 90
 
     def test_accepts_period_file_schema(self, ctx):
-        """Contract: to_period_data() accepts PeriodFileSchema object."""
+        """Contract: map_period() accepts PeriodFileSchema object and returns PeriodData."""
         schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
-
         result = map_period(schema)
-
         assert isinstance(result, PeriodData)
-        assert hasattr(result, "peeps")
-        assert hasattr(result, "events")
-        assert hasattr(result, "cancelled_events")
-        assert hasattr(result, "cancelled_member_availability")
-        assert hasattr(result, "partnership_requests")
-        assert hasattr(result, "topics")
 
     def test_populates_peeps_from_schema(self, ctx):
         """Contract: Peeps populated correctly from schema members and responses."""

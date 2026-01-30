@@ -75,8 +75,10 @@ def temp_period_dir(ctx):
       - Keeps `Carol` inactive to test handling of inactive members.
       - Adds a partnership request and a cancelled-member-availability entry for integration testing.
     """
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
+        tmpdir_path = Path(tmpdir) / "original" / "2020-01"
+        tmpdir_path.mkdir(parents=True)
 
         # members.csv (3 members: active and inactive)
         members_csv = tmpdir_path / "members.csv"

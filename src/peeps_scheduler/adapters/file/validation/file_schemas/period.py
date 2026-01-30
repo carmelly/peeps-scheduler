@@ -64,7 +64,7 @@ class PeriodFileSchema(BaseModel):
     members: MembersCsvFileSchema
     responses: ResponsesCsvFileSchema
     results: ResultsJsonSchema | None = None
-    attendance: ActualAttendanceJsonSchema = None
+    attendance: ActualAttendanceJsonSchema | None = None
     cancelled_events: EventSpecList = []
     cancelled_member_availability: list[CancelledAvailabilityJsonSchema] = []
     partnership_requests: list[PartnershipRequestJsonSchema] = []

@@ -21,48 +21,54 @@ PEEPS_CSV_FIELDS = [
 
 
 def load_csv(filename, required_columns=None):
-    """Load CSV file and validate required columns, trimming whitespace from headers and values."""
-    if required_columns is None:
-        required_columns = []
-    with Path(filename).open(newline="", encoding="utf-8") as csvfile:
-        # Read the first line (fieldnames), trim whitespace
-        reader = csv.reader(csvfile)
-        try:
-            raw_fieldnames = next(reader)
-        except StopIteration:
-            return []
+    from peeps_scheduler.adapters.file.loader import _load_csv_rows
 
-        fieldnames = [name.strip() for name in raw_fieldnames]
+    return _load_csv_rows(Path(filename))
 
-        # Check required columns
-        missing = set(required_columns) - set(fieldnames)
-        if required_columns and missing:
-            raise ValueError(f"missing required column(s): {missing}")
 
-        # Rebuild DictReader with cleaned headers
-        dict_reader = csv.DictReader(csvfile, fieldnames=fieldnames)
-        rows = []
+# def load_csv(filename, required_columns=None):
+#     """Load CSV file and validate required columns, trimming whitespace from headers and values."""
+#     if required_columns is None:
+#         required_columns = []
+#     with Path(filename).open(newline="", encoding="utf-8") as csvfile:
+#         # Read the first line (fieldnames), trim whitespace
+#         reader = csv.reader(csvfile)
+#         try:
+#             raw_fieldnames = next(reader)
+#         except StopIteration:
+#             return []
 
-        def _normalize_text(s):
-            # Replace smart quotes (\u2018, \u2019, \u201C, \u201D) with ASCII quotes
-            s = (
-                s.replace("\u2019", "'")
-                .replace("\u2018", "'")
-                .replace("\u201c", '"')
-                .replace("\u201d", '"')
-            )
-            # Normalize multiple spaces to single space
-            import re
+#         fieldnames = [name.strip() for name in raw_fieldnames]
 
-            s = re.sub(r"\s+", " ", s)
-            return s
+#         # Check required columns
+#         missing = set(required_columns) - set(fieldnames)
+#         if required_columns and missing:
+#             raise ValueError(f"missing required column(s): {missing}")
 
-        # Strip whitespace, normalize quotes and whitespace for every value
-        for row in dict_reader:
-            cleaned = {k: _normalize_text(v.strip()) if v else "" for k, v in row.items()}
-            rows.append(cleaned)
+#         # Rebuild DictReader with cleaned headers
+#         dict_reader = csv.DictReader(csvfile, fieldnames=fieldnames)
+#         rows = []
 
-        return rows
+#         def _normalize_text(s):
+#             # Replace smart quotes (\u2018, \u2019, \u201C, \u201D) with ASCII quotes
+#             s = (
+#                 s.replace("\u2019", "'")
+#                 .replace("\u2018", "'")
+#                 .replace("\u201c", '"')
+#                 .replace("\u201d", '"')
+#             )
+#             # Normalize multiple spaces to single space
+#             import re
+
+#             s = re.sub(r"\s+", " ", s)
+#             return s
+
+#         # Strip whitespace, normalize quotes and whitespace for every value
+#         for row in dict_reader:
+#             cleaned = {k: _normalize_text(v.strip()) if v else "" for k, v in row.items()}
+#             rows.append(cleaned)
+
+#         return rows
 
 
 def save_peeps_csv(peeps: list[Peep], output_path: Path):

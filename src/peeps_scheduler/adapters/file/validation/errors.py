@@ -8,8 +8,8 @@ MAX_ERRORS_DISPLAYED = 10
 class FileValidationError(Exception):
     """Wraps Pydantic ValidationError with file context."""
 
-    def __init__(self, file_path: str, validation_error: ValidationError):
-        self.file_path = file_path
+    def __init__(self, filename: str, validation_error: ValidationError):
+        self.filename = filename
         self.validation_error = validation_error
 
     def errors(self) -> list[dict]:
@@ -18,7 +18,7 @@ class FileValidationError(Exception):
 
     def __str__(self) -> str:
         """Return human-readable format with file context."""
-        lines = [f"Validation failed in {self.file_path}:"]
+        lines = [f"Validation failed in {self.filename}:"]
 
         # Get all errors
         all_errors = self.errors()
@@ -59,7 +59,7 @@ class MultiFileValidationError(Exception):
         for file_error in self.file_errors:
             for error_dict in file_error.errors():
                 # Add 'file' key to each error dict
-                error_with_file = {**error_dict, "file": file_error.file_path}
+                error_with_file = {**error_dict, "file": file_error.filename}
                 result.append(error_with_file)
         return result
 

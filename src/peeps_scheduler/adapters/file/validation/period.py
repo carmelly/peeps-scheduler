@@ -4,16 +4,55 @@ Period data loading and orchestration.
 Provides composable functions for loading, validating, and converting period data.
 """
 
-import json
 from pathlib import Path
 from pydantic import ValidationError
-from peeps_scheduler import file_io
-from peeps_scheduler.adapters.file.mappers import map_period
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import PeriodData
 from .errors import FileValidationError
 from .fields import ValidationContext
 from .file_schemas.period import PeriodFileSchema
+
+
+def _infer_validation_file(error: ValidationError) -> str:
+    fields = set()
+    for err in error.errors():
+        loc = err.get("loc") or ()
+        fields.add(loc[0] if loc else None)
+    if len(fields) == 1:
+        field = next(iter(fields))
+        if field == "members":
+            return "members.csv"
+        if field == "responses":
+            return "responses.csv"
+        if field in {
+            "cancelled_events",
+            "cancelled_member_availability",
+            "partnership_requests",
+            "topics",
+        }:
+            return "period_config.json"
+
+
+def validate_period_data(
+    raw_data: dict,
+    year: int,
+) -> PeriodFileSchema:
+    """
+    Validate raw period data and return validated schema.
+
+    Args:
+        raw_data: Raw period data as dict
+        year: Year for validation context
+    Returns:
+        Validated PeriodFileSchema
+    """
+    ctx = ValidationContext(year=year, tz=DEFAULT_TIMEZONE)
+    try:
+        period_schema = PeriodFileSchema.model_validate(raw_data, context={"ctx": ctx})
+    except ValidationError as exc:
+        filename = _infer_validation_file(exc)
+        raise FileValidationError(filename, exc) from exc
+    return period_schema
 
 
 def load_and_validate_period(
@@ -38,110 +77,10 @@ def load_and_validate_period(
         FileNotFoundError: If required files missing
         FileValidationError: If validation fails
     """
-    raw = load_period_files(
-        period_path,
-        allow_missing_responses=allow_missing_responses,
-        require_attendance=require_attendance,
+    from peeps_scheduler.adapters.file.loader import FilePeriodLoader
+
+    loader = FilePeriodLoader(
+        Path(period_path).parent, year, not allow_missing_responses, require_attendance
     )
-    ctx = ValidationContext(year=year, tz=DEFAULT_TIMEZONE)
-    try:
-        period_schema = PeriodFileSchema.model_validate(raw, context={"ctx": ctx})
-    except ValidationError as exc:
-        file_path = _infer_validation_file(exc, Path(period_path))
-        raise FileValidationError(str(file_path), exc) from exc
-    return map_period(period_schema)
-
-
-def _infer_validation_file(error: ValidationError, period_dir: Path) -> Path:
-    fields = set()
-    for err in error.errors():
-        loc = err.get("loc") or ()
-        fields.add(loc[0] if loc else None)
-    if len(fields) == 1:
-        field = next(iter(fields))
-        if field == "members":
-            return period_dir / "members.csv"
-        if field == "responses":
-            return period_dir / "responses.csv"
-        if field in {
-            "cancelled_events",
-            "cancelled_member_availability",
-            "partnership_requests",
-            "topics",
-        }:
-            return period_dir / "period_config.json"
-    return period_dir / "period_config.json"
-
-
-def load_period_files(
-    period_path: str,
-    allow_missing_responses: bool = False,
-    require_attendance: bool = False,
-) -> dict:
-    """
-    Load raw CSV/JSON files from period directory.
-
-    Returns dict formatted for PeriodFileSchema validation.
-
-    Raises:
-        FileNotFoundError: If required files (members.csv, responses.csv) missing
-    """
-    period_dir = Path(period_path)
-
-    # Define file paths
-    members_file = period_dir / "members.csv"
-    responses_file = period_dir / "responses.csv"
-    results_file = period_dir / "results.json"
-    attendance_file = period_dir / "actual_attendance.json"
-    period_config_file = period_dir / "period_config.json"
-
-    # Check required files exist
-    if not members_file.is_file():
-        raise FileNotFoundError(f"Required file not found: {members_file}")
-    if not responses_file.is_file() and not allow_missing_responses:
-        raise FileNotFoundError(f"Required file not found: {responses_file}")
-    if require_attendance and not attendance_file.is_file():
-        raise FileNotFoundError(f"Required file not found: {attendance_file}")
-
-    # Load required CSV files using file_io (gets normalization)
-    member_rows = file_io.load_csv(str(members_file))
-    response_rows = file_io.load_csv(str(responses_file)) if responses_file.is_file() else []
-
-    event_rows = []
-    response_data_rows = []
-    for row in response_rows:
-        name = (row.get("Name") or "").strip()
-        if name.startswith("Event:"):
-            event_rows.append({**row, "Name": name.split("Event:", 1)[1].strip()})
-        else:
-            response_data_rows.append(row)
-
-    # Load optional period_config.json (contains cancellations, partnerships, topics)
-    period_config_data = {}
-    if period_config_file.is_file():
-        with period_config_file.open() as f:
-            period_config_data = json.load(f)
-
-    period_data = {
-        "members": member_rows,
-        "responses": {
-            "responses": response_data_rows,
-            "event_rows": event_rows or None,
-        },
-        "cancelled_events": period_config_data.get("cancelled_events", []),
-        "cancelled_member_availability": period_config_data.get(
-            "cancelled_member_availability", []
-        ),
-        "partnership_requests": period_config_data.get("partnership_requests", []),
-        "topics": period_config_data.get("topics", []),
-    }
-
-    if results_file.is_file():
-        with results_file.open() as f:
-            period_data["results"] = json.load(f)
-
-    if attendance_file.is_file():
-        with attendance_file.open() as f:
-            period_data["attendance"] = json.load(f)
-
-    return period_data
+    period_slug = Path(period_path).name
+    return loader.load_period(period_slug)

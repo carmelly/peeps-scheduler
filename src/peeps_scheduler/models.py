@@ -47,7 +47,7 @@ class Peep:
         self.priority = kwargs.get("priority", 0)
         self.original_priority = self.priority
         self.total_attended = kwargs.get("total_attended", 0)
-        self.availability = kwargs.get("availability", [])
+        self.availability: list[Event] = kwargs.get("availability", [])
         self.event_limit = kwargs.get("event_limit", 0)
         self.num_events = 0  # always start at 0, gets incremented during the run
         self.min_interval_days = kwargs.get("min_interval_days", 0)

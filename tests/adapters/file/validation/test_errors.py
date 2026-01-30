@@ -41,7 +41,7 @@ class TestFileValidationErrorWrapping:
         """Test wrapping ValidationError and accessing file context."""
         error = FileValidationError("members.csv", validation_error)
 
-        assert error.file_path == "members.csv"
+        assert error.filename == "members.csv"
         assert error.validation_error is validation_error
 
 

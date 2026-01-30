@@ -14,9 +14,7 @@ from .validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
 )
-from .validation.file_schemas.responses_csv import (
-    ResponsesCsvFileSchema,
-)
+from .validation.file_schemas.responses_csv import ResponseCsvRowSchema, ResponsesCsvFileSchema
 from .validation.file_schemas.results_json import ResultsJsonSchema
 from .validation.helpers import normalize_email_for_match
 from .validation.parsers import EventSpec
@@ -24,7 +22,7 @@ from .validation.parsers import EventSpec
 
 def _member_to_peep(
     member_data: MemberCsvRowSchema,
-    response_data: ResponsesCsvFileSchema | None = None,
+    response_data: ResponseCsvRowSchema | None = None,
     events_by_datetime: dict | None = None,
 ) -> Peep:
     """
@@ -56,20 +54,19 @@ def _member_to_peep(
 
     # Override/augment with response data if provided
     if response_data:
-        response = response_data.responses[0]
-        peep_data["role"] = response.primary_role
+        peep_data["role"] = response_data.primary_role
         if events_by_datetime is None:
             raise ValueError(
                 "events_by_datetime is required when response_data is provided "
                 f"for member id={member_data.id}, email={member_data.email_address!r}"
             )
         peep_data["availability"] = [
-            events_by_datetime[event.start] for event in response.availability
+            events_by_datetime[event.start] for event in response_data.availability
         ]
-        peep_data["switch_pref"] = response.secondary_role
-        peep_data["event_limit"] = response.max_sessions
-        peep_data["min_interval_days"] = response.min_interval_days
-        peep_data["topic_votes"] = response.deep_dive_topics
+        peep_data["switch_pref"] = response_data.secondary_role
+        peep_data["event_limit"] = response_data.max_sessions
+        peep_data["min_interval_days"] = response_data.min_interval_days
+        peep_data["topic_votes"] = response_data.deep_dive_topics
 
     return Peep(**peep_data)
 
@@ -122,14 +119,7 @@ def map_peeps(
 
         # Find matching response by email
         matching_response = responses_map.get(email)
-
-        # Pass response schema if found, otherwise pass None
-        # If matching response found, wrap in a ResponsesCsvFileSchema
-        response_to_pass = None
-        if matching_response:
-            response_to_pass = ResponsesCsvFileSchema(responses=[matching_response], event_rows=[])
-
-        peep = _member_to_peep(member, response_to_pass, events_by_datetime)
+        peep = _member_to_peep(member, matching_response, events_by_datetime)
         peeps.append(peep)
 
     return peeps
