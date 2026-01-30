@@ -1,18 +1,25 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
-from .file_schemas.attendance_json import ActualAttendanceJsonSchema
-from .file_schemas.members_csv import MemberCsvRowSchema
-from .file_schemas.period import (
+from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.models import (
+    CancelledMemberAvailability,
+    Event,
+    PartnershipRequest,
+    Peep,
+    PeriodData,
+)
+from .validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
+from .validation.file_schemas.members_csv import MemberCsvRowSchema
+from .validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
 )
-from .file_schemas.responses_csv import (
+from .validation.file_schemas.responses_csv import (
     ResponsesCsvFileSchema,
 )
-from .file_schemas.results_json import ResultsJsonSchema
-from .helpers import normalize_email_for_match
-from .parsers import EventSpec
+from .validation.file_schemas.results_json import ResultsJsonSchema
+from .validation.helpers import normalize_email_for_match
+from .validation.parsers import EventSpec
 
 
 def _member_to_peep(
@@ -74,7 +81,7 @@ def _event_spec_to_event(event_id: int, spec: EventSpec) -> Event:
     return Event(id=event_id, date=spec.start, duration_minutes=spec.duration_minutes)
 
 
-def build_peeps(
+def map_peeps(
     member_dicts: list[MemberCsvRowSchema],
     response_dicts: ResponsesCsvFileSchema | dict,
     events: list[Event],
@@ -128,7 +135,7 @@ def build_peeps(
     return peeps
 
 
-def build_events(event_specs: list[EventSpec], preserve_order: bool) -> list[Event]:
+def map_events(event_specs: list[EventSpec], preserve_order: bool) -> list[Event]:
     """
     Build Event domain objects from validated EventSpec instances.
 
@@ -155,7 +162,7 @@ def build_events(event_specs: list[EventSpec], preserve_order: bool) -> list[Eve
     return events
 
 
-def build_cancelled_events(
+def map_cancelled_events(
     cancelled_event_specs: list[EventSpec], events: list[Event]
 ) -> list[Event]:
     """
@@ -175,7 +182,7 @@ def build_cancelled_events(
     return cancelled_events
 
 
-def build_cancelled_availability(
+def map_cancelled_availability(
     schemas: list[CancelledAvailabilityJsonSchema], peeps: list[Peep], events: list[Event]
 ) -> list[CancelledMemberAvailability]:
     """
@@ -205,7 +212,7 @@ def build_cancelled_availability(
     return cancelled_availability_list
 
 
-def build_partnerships(
+def map_partnerships(
     schemas: list[PartnershipRequestJsonSchema], peeps: list[Peep]
 ) -> list[PartnershipRequest]:
     """
@@ -235,7 +242,7 @@ def build_partnerships(
     return partnership_requests
 
 
-def build_attendance_events(
+def map_attendance_events(
     attendance: ActualAttendanceJsonSchema | None, peeps: list[Peep]
 ) -> list[Event]:
     """Build Event objects from validated attendance data."""
@@ -257,7 +264,7 @@ def build_attendance_events(
     return events
 
 
-def build_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -> list[Event]:
+def map_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -> list[Event]:
     """Build Event objects from validated results data."""
     if results is None:
         return []
@@ -278,3 +285,37 @@ def build_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -
             event.add_alternate(peep, alternate.role)
         events.append(event)
     return events
+
+
+def map_period(period_schema: PeriodFileSchema) -> PeriodData:
+    """
+    Convert PeriodFileSchema to PeriodData domain object.
+
+    Args:
+        period_schema: Validated PeriodFileSchema object
+        year: Year for context
+
+    Returns:
+        PeriodData with all components assembled
+    """
+    preserve_order = bool(period_schema.responses.event_rows)
+    events = map_events(period_schema.responses.events, preserve_order)
+    peeps = map_peeps(period_schema.members.root, period_schema.responses, events)
+    results_events = map_results_events(period_schema.results, peeps)
+    attendance_events = map_attendance_events(period_schema.attendance, peeps)
+    cancelled_events = map_cancelled_events(period_schema.cancelled_events, events)
+    cancelled_availability = map_cancelled_availability(
+        period_schema.cancelled_member_availability, peeps, events
+    )
+    partnership_requests = map_partnerships(period_schema.partnership_requests, peeps)
+
+    return PeriodData(
+        peeps=peeps,
+        events=events,
+        results_events=results_events,
+        attendance_events=attendance_events,
+        cancelled_events=cancelled_events,
+        cancelled_member_availability=cancelled_availability,
+        partnership_requests=partnership_requests,
+        topics=period_schema.topics,
+    )

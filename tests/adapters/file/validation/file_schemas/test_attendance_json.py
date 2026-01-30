@@ -1,14 +1,14 @@
 from datetime import datetime
 import pytest
 from pydantic import ValidationError
+from tests.adapters.file.validation.conftest import assert_error_for_model
+from tests.adapters.file.validation.fixtures import attendance_data, attendance_event_data
 from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
     ActualAttendanceJsonSchema,
     AttendanceEventJsonSchema,
     RosterEntryJsonSchema,
 )
 from peeps_scheduler.models import Role
-from tests.adapters.file.validation.conftest import assert_error_for_model
-from tests.adapters.file.validation.fixtures import attendance_data, attendance_event_data
 
 
 @pytest.mark.unit

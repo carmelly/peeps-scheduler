@@ -20,6 +20,20 @@ class SwitchPreference(Enum):
     SWITCH_IF_NEEDED = 3  # "Only if needed to fill a session"
 
 
+@dataclass(frozen=True)
+class PeriodData:
+    """Everything needed to run the scheduler."""
+
+    peeps: list["Peep"]
+    events: list["Event"]
+    results_events: list["Event"] = ()
+    attendance_events: list["Event"] = ()
+    cancelled_events: list["Event"] = ()
+    cancelled_member_availability: list["CancelledMemberAvailability"] = ()
+    partnership_requests: list["PartnershipRequest"] = ()
+    topics: list[str] = ()
+
+
 class Peep:
     def __init__(self, **kwargs):
         self.id = kwargs.get("id")

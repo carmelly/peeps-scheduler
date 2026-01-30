@@ -5,20 +5,14 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 import pytest
-from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
-from peeps_scheduler.adapters.file.validation.period import (
-    PeriodData,
-    load_and_validate_period,
-    to_period_data,
-)
+from peeps_scheduler.adapters.file.validation.period import load_and_validate_period
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
     PartnershipRequest,
     Peep,
+    PeriodData,
 )
-from tests.adapters.file.validation.file_schemas.test_period import period_data
-from tests.adapters.file.validation.fixtures import event_row_data, response_data
 
 pytestmark = pytest.mark.integration
 
@@ -144,6 +138,7 @@ class TestPeriodSchemaIntegration:
     def test_period_file_schema_validates_all_cross_file_constraints(self, ctx, temp_period_dir):
         """Integration: PeriodFileSchema enforces all cross-file validation rules."""
         # This test verifies the complete validation works end-to-end
+        # TODO: no it doesn't, what is this even doing here
         period_data_obj = load_and_validate_period(str(temp_period_dir), 2020)
 
         # Should successfully validate all components
@@ -152,33 +147,6 @@ class TestPeriodSchemaIntegration:
         assert isinstance(period_data_obj.cancelled_events, list)
         assert isinstance(period_data_obj.partnership_requests, list)
         assert isinstance(period_data_obj.topics, list)
-
-    def test_to_period_data_converts_event_specs_to_events(self, ctx):
-        """Contract: to_period_data() converts EventSpec to Event domain objects."""
-        schema = PeriodFileSchema.model_validate(
-            period_data(
-                {
-                    "responses": {
-                        "responses": [response_data()],
-                        "event_rows": [
-                            # Defaults:
-                            # "Name": "Saturday January 4 - 1pm"
-                            # "Event Duration": "90"
-                            event_row_data()
-                        ],
-                    }
-                }
-            ),
-            context={"ctx": ctx},
-        )
-
-        result = to_period_data(schema, 2020)
-
-        # Events should be Event domain objects, not EventSpecs
-        assert len(result.events) == 1
-        assert isinstance(result.events[0], Event)
-        assert result.events[0].date == datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
-        assert result.events[0].duration_minutes == 90
 
     def test_load_and_validate_period_happy_path_comprehensive(self, ctx, temp_period_dir):
         """Comprehensive happy-path: validate full PeriodData shapes and types."""
@@ -227,87 +195,6 @@ class TestPeriodSchemaIntegration:
             "Balance for Spins and Turns",
             "Angles for Shaping & Slotting",
         ]
-
-
-@pytest.mark.unit
-class TestToPeriodData:
-    """Tests for to_period_data() function with PeriodFileSchema."""
-
-    def test_accepts_period_file_schema(self, ctx):
-        """Contract: to_period_data() accepts PeriodFileSchema object."""
-        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
-
-        result = to_period_data(schema, 2020)
-
-        assert isinstance(result, PeriodData)
-        assert hasattr(result, "peeps")
-        assert hasattr(result, "events")
-        assert hasattr(result, "cancelled_events")
-        assert hasattr(result, "cancelled_member_availability")
-        assert hasattr(result, "partnership_requests")
-        assert hasattr(result, "topics")
-
-    def test_populates_peeps_from_schema(self, ctx):
-        """Contract: Peeps populated correctly from schema members and responses."""
-        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
-
-        result = to_period_data(schema, 2020)
-
-        assert len(result.peeps) >= 2
-        assert all(isinstance(p, Peep) for p in result.peeps)
-        assert any(p.id == 1 for p in result.peeps)
-        assert any(p.id == 2 for p in result.peeps)
-
-    def test_populates_events_from_schema_responses_events(self, ctx):
-        """Contract: Events created from schema.responses.events (EventSpecs)."""
-        schema = PeriodFileSchema.model_validate(
-            period_data(
-                {
-                    "responses": {
-                        "responses": [response_data()],
-                        "event_rows": [
-                            event_row_data(
-                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
-                            )
-                        ],
-                    }
-                }
-            ),
-            context={"ctx": ctx},
-        )
-
-        result = to_period_data(schema, 2020)
-
-        assert len(result.events) >= 1
-        assert all(isinstance(e, Event) for e in result.events)
-        # Events should be created from responses.events
-        event = result.events[0]
-        assert event.date is not None
-        assert event.duration_minutes == 90  # From event_row
-
-    def test_extracts_cancellations_from_schema(self, ctx):
-        """Contract: Cancellations extracted correctly from schema."""
-        schema = PeriodFileSchema.model_validate(
-            period_data(
-                {
-                    "responses": {
-                        "responses": [response_data()],
-                        "event_rows": [
-                            event_row_data(
-                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
-                            )
-                        ],
-                    },
-                    "cancelled_events": ["Saturday January 4 - 1pm"],
-                }
-            ),
-            context={"ctx": ctx},
-        )
-
-        result = to_period_data(schema, 2020)
-
-        assert isinstance(result.cancelled_events, list)
-        assert len(result.cancelled_events) == 1
 
 
 class TestLoadAndValidatePeriod:

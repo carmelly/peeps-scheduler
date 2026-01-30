@@ -5,38 +5,15 @@ Provides composable functions for loading, validating, and converting period dat
 """
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from pydantic import ValidationError
 from peeps_scheduler import file_io
+from peeps_scheduler.adapters.file.mappers import map_period
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
-from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
-from .builders import (
-    build_attendance_events,
-    build_cancelled_availability,
-    build_cancelled_events,
-    build_events,
-    build_partnerships,
-    build_peeps,
-    build_results_events,
-)
+from peeps_scheduler.models import PeriodData
 from .errors import FileValidationError
 from .fields import ValidationContext
 from .file_schemas.period import PeriodFileSchema
-
-
-@dataclass(frozen=True)
-class PeriodData:
-    """Everything needed to run the scheduler."""
-
-    peeps: list[Peep]
-    events: list[Event]
-    results_events: list[Event] = ()
-    attendance_events: list[Event] = ()
-    cancelled_events: list[Event] = ()
-    cancelled_member_availability: list[CancelledMemberAvailability] = ()
-    partnership_requests: list[PartnershipRequest] = ()
-    topics: list[str] = ()
 
 
 def load_and_validate_period(
@@ -72,7 +49,7 @@ def load_and_validate_period(
     except ValidationError as exc:
         file_path = _infer_validation_file(exc, Path(period_path))
         raise FileValidationError(str(file_path), exc) from exc
-    return to_period_data(period_schema, year)
+    return map_period(period_schema)
 
 
 def _infer_validation_file(error: ValidationError, period_dir: Path) -> Path:
@@ -168,37 +145,3 @@ def load_period_files(
             period_data["attendance"] = json.load(f)
 
     return period_data
-
-
-def to_period_data(period_schema: PeriodFileSchema, year: int) -> PeriodData:
-    """
-    Convert PeriodFileSchema to PeriodData domain object.
-
-    Args:
-        period_schema: Validated PeriodFileSchema object
-        year: Year for context
-
-    Returns:
-        PeriodData with all components assembled
-    """
-    preserve_order = bool(period_schema.responses.event_rows)
-    events = build_events(period_schema.responses.events, preserve_order)
-    peeps = build_peeps(period_schema.members.root, period_schema.responses, events)
-    results_events = build_results_events(period_schema.results, peeps)
-    attendance_events = build_attendance_events(period_schema.attendance, peeps)
-    cancelled_events = build_cancelled_events(period_schema.cancelled_events, events)
-    cancelled_availability = build_cancelled_availability(
-        period_schema.cancelled_member_availability, peeps, events
-    )
-    partnership_requests = build_partnerships(period_schema.partnership_requests, peeps)
-
-    return PeriodData(
-        peeps=peeps,
-        events=events,
-        results_events=results_events,
-        attendance_events=attendance_events,
-        cancelled_events=cancelled_events,
-        cancelled_member_availability=cancelled_availability,
-        partnership_requests=partnership_requests,
-        topics=period_schema.topics,
-    )

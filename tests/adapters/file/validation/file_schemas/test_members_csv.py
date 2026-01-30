@@ -1,12 +1,12 @@
 import pytest
 from pydantic import ValidationError
+from tests.adapters.file.validation.conftest import assert_error_for_field, assert_error_for_model
+from tests.adapters.file.validation.fixtures import member_data
 from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
 from peeps_scheduler.models import Role
-from tests.adapters.file.validation.conftest import assert_error_for_field, assert_error_for_model
-from tests.adapters.file.validation.fixtures import member_data
 
 pytestmark = pytest.mark.unit
 

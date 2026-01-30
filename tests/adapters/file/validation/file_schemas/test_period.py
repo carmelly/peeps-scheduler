@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+from tests.adapters.file.validation.conftest import assert_error_for_model
 from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
     ActualAttendanceJsonSchema,
     RosterEntryJsonSchema,
@@ -19,7 +20,6 @@ from peeps_scheduler.adapters.file.validation.file_schemas.period import (
 from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import ResponseCsvRowSchema
 from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.adapters.file.validation.parsers import parse_event_name
-from tests.adapters.file.validation.conftest import assert_error_for_model
 
 pytestmark = pytest.mark.unit
 

@@ -2,16 +2,27 @@
 
 import datetime
 import pytest
-from peeps_scheduler.adapters.file.validation.builders import (
+from tests.adapters.file.validation.file_schemas.test_period import period_data
+from tests.adapters.file.validation.fixtures import (
+    attendance_data,
+    attendance_event_data,
+    event_row_data,
+    member_data,
+    response_data,
+    result_event_data,
+    results_data,
+)
+from peeps_scheduler.adapters.file.mappers import (
     _event_spec_to_event,
     _member_to_peep,
-    build_attendance_events,
-    build_cancelled_availability,
-    build_cancelled_events,
-    build_events,
-    build_partnerships,
-    build_peeps,
-    build_results_events,
+    map_attendance_events,
+    map_cancelled_availability,
+    map_cancelled_events,
+    map_events,
+    map_partnerships,
+    map_peeps,
+    map_period,
+    map_results_events,
 )
 from peeps_scheduler.adapters.file.validation.fields import ValidationContext
 from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
@@ -23,12 +34,14 @@ from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
 from peeps_scheduler.adapters.file.validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
+    PeriodFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import (
     ResponsesCsvFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.adapters.file.validation.parsers import EventSpec
+from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
@@ -37,14 +50,6 @@ from peeps_scheduler.models import (
     Peep,
     Role,
     SwitchPreference,
-)
-from tests.adapters.file.validation.fixtures import (
-    attendance_data,
-    attendance_event_data,
-    member_data,
-    response_data,
-    result_event_data,
-    results_data,
 )
 
 
@@ -309,7 +314,7 @@ class TestBuildEvents:
             ),
         ]
 
-        events = build_events(specs, preserve_order=True)
+        events = map_events(specs, preserve_order=True)
 
         assert [event.id for event in events] == [0, 1]
         assert [event.date for event in events] == [specs[0].start, specs[1].start]
@@ -329,7 +334,7 @@ class TestBuildEvents:
             ),
         ]
 
-        events = build_events(specs, preserve_order=False)
+        events = map_events(specs, preserve_order=False)
 
         assert [event.id for event in events] == [0, 1]
         assert [event.date for event in events] == [specs[1].start, specs[0].start]
@@ -351,9 +356,9 @@ class TestBuildPeeps:
             },
             context={"ctx": response_ctx},
         )
-        events = build_events(validated_responses.events, preserve_order=False)
+        events = map_events(validated_responses.events, preserve_order=False)
 
-        peeps = build_peeps(validated_members, validated_responses, events)
+        peeps = map_peeps(validated_members, validated_responses, events)
 
         assert len(peeps) == 1
         assert isinstance(peeps[0], Peep)
@@ -366,7 +371,7 @@ class TestBuildPeeps:
 
         validated_members = MembersCsvFileSchema.model_validate([member_data()]).root
 
-        peeps = build_peeps(validated_members, {}, [])
+        peeps = map_peeps(validated_members, {}, [])
 
         assert len(peeps) == 1
         assert peeps[0].responded is False
@@ -401,10 +406,10 @@ class TestBuildPeeps:
             },
             context={"ctx": response_ctx},
         )
-        events = build_events(validated_responses.events, preserve_order=False)
+        events = map_events(validated_responses.events, preserve_order=False)
 
         # Convert - should match despite different email formats
-        peeps = build_peeps(validated_members, validated_responses, events)
+        peeps = map_peeps(validated_members, validated_responses, events)
 
         # Verify match was successful
         assert len(peeps) == 1
@@ -431,7 +436,7 @@ class TestBuildCancelledEvents:
                 raw="Saturday January 4 - 1pm",
             )
         ]
-        cancelled_events = build_cancelled_events(
+        cancelled_events = map_cancelled_events(
             cancelled_event_specs=cancelled_event_specs, events=events
         )
         assert isinstance(cancelled_events, list)
@@ -446,7 +451,7 @@ class TestBuildCancelledEvents:
             event_factory(id=2, date=datetime.datetime(2020, 1, 5, 15, 0, tzinfo=ctx.tz)),
         ]
 
-        cancelled_events = build_cancelled_events(
+        cancelled_events = map_cancelled_events(
             cancelled_event_specs=[],
             events=events,
         )
@@ -480,7 +485,7 @@ class TestBuildCancelledAvailability:
                 context={"ctx": ctx},
             ),
         ]
-        cancelled_availability_list = build_cancelled_availability(
+        cancelled_availability_list = map_cancelled_availability(
             schemas=cancelled_availability, peeps=peeps, events=events
         )
         assert isinstance(cancelled_availability_list, list)
@@ -521,7 +526,7 @@ class TestBuildPartnerships:
             peep_factory(id=4, email="dave@example.com"),
             peep_factory(id=5, email="eve@example.com"),
         ]
-        partnerships = build_partnerships(schemas=requests, peeps=peeps)
+        partnerships = map_partnerships(schemas=requests, peeps=peeps)
         assert isinstance(partnerships, list)
         assert all(isinstance(p, PartnershipRequest) for p in partnerships)
         assert len(partnerships) == 2
@@ -532,11 +537,10 @@ class TestBuildPartnerships:
 
     def test_builds_empty_partnerships_for_no_requests(self, peep_factory, ctx):
         """Edge case: Returns empty list when no partnership requests provided."""
-        from peeps_scheduler.adapters.file.validation.builders import build_partnerships
 
         requests = []
         peeps = [peep_factory(id=1, email="alice@example.com")]
-        partnerships = build_partnerships(schemas=requests, peeps=peeps)
+        partnerships = map_partnerships(schemas=requests, peeps=peeps)
         assert partnerships == []
 
 
@@ -568,7 +572,7 @@ class TestBuildAttendanceEvents:
         )
         schema = ActualAttendanceJsonSchema.model_validate(attendance_payload, context={"ctx": ctx})
 
-        events = build_attendance_events(schema, peeps)
+        events = map_attendance_events(schema, peeps)
 
         assert len(events) == 1
         event = events[0]
@@ -611,7 +615,7 @@ class TestBuildResultsEvents:
         )
         schema = ResultsJsonSchema.model_validate(results_payload, context={"ctx": ctx})
 
-        events = build_results_events(schema, peeps)
+        events = map_results_events(schema, peeps)
 
         assert len(events) == 1
         event = events[0]
@@ -620,3 +624,105 @@ class TestBuildResultsEvents:
         assert peeps[1] in event.followers
         assert peeps[2] in event.alt_leaders
         assert peeps[3] in event.alt_followers
+
+
+@pytest.mark.unit
+class TestMapPeriod:
+    """Tests for map_period() function with PeriodFileSchema."""
+
+    def test_converts_event_specs_to_events(self, ctx):
+        """Contract: map_period() converts EventSpec to Event domain objects."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [event_row_data()],
+                    }
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = map_period(schema)
+
+        assert len(result.events) == 1
+        assert isinstance(result.events[0], Event)
+        assert result.events[0].date == datetime.datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
+        assert result.events[0].duration_minutes == 90
+
+    def test_accepts_period_file_schema(self, ctx):
+        """Contract: to_period_data() accepts PeriodFileSchema object."""
+        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+
+        result = map_period(schema)
+
+        assert isinstance(result, PeriodData)
+        assert hasattr(result, "peeps")
+        assert hasattr(result, "events")
+        assert hasattr(result, "cancelled_events")
+        assert hasattr(result, "cancelled_member_availability")
+        assert hasattr(result, "partnership_requests")
+        assert hasattr(result, "topics")
+
+    def test_populates_peeps_from_schema(self, ctx):
+        """Contract: Peeps populated correctly from schema members and responses."""
+        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+
+        result = map_period(schema)
+
+        assert len(result.peeps) >= 2
+        assert all(isinstance(p, Peep) for p in result.peeps)
+        assert any(p.id == 1 for p in result.peeps)
+        assert any(p.id == 2 for p in result.peeps)
+
+    def test_populates_events_from_schema_responses_events(self, ctx):
+        """Contract: Events created from schema.responses.events (EventSpecs)."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [
+                            event_row_data(
+                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                            )
+                        ],
+                    }
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = map_period(schema)
+
+        assert len(result.events) >= 1
+        assert all(isinstance(e, Event) for e in result.events)
+        # Events should be created from responses.events
+        event = result.events[0]
+        assert event.date is not None
+        assert event.duration_minutes == 90  # From event_row
+
+    def test_extracts_cancellations_from_schema(self, ctx):
+        """Contract: Cancellations extracted correctly from schema."""
+        schema = PeriodFileSchema.model_validate(
+            period_data(
+                {
+                    "responses": {
+                        "responses": [response_data()],
+                        "event_rows": [
+                            event_row_data(
+                                {"Name": "Saturday January 4 - 1pm", "Event Duration": "90"}
+                            )
+                        ],
+                    },
+                    "cancelled_events": ["Saturday January 4 - 1pm"],
+                }
+            ),
+            context={"ctx": ctx},
+        )
+
+        result = map_period(schema)
+
+        assert isinstance(result.cancelled_events, list)
+        assert len(result.cancelled_events) == 1
