@@ -1,21 +1,21 @@
 import re
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
-from peeps_scheduler.validation.fields import EmailAddressStr, EventSpecList
-from peeps_scheduler.validation.file_schemas.attendance_json import (
+from ..fields import EmailAddressStr, EventSpecList
+from ..helpers import normalize_email_for_match
+from ..parsers import EventSpec
+from .attendance_json import (
     ActualAttendanceJsonSchema,
     RosterEntryJsonSchema,
 )
-from peeps_scheduler.validation.file_schemas.members_csv import (
+from .members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.responses_csv import (
+from .responses_csv import (
     ResponseCsvRowSchema,
     ResponsesCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
-from peeps_scheduler.validation.helpers import normalize_email_for_match
-from peeps_scheduler.validation.parsers import EventSpec
+from .results_json import ResultsJsonSchema
 
 
 class CancelledAvailabilityJsonSchema(BaseModel):
@@ -136,9 +136,7 @@ def validate_response_members(
     responses: list[ResponseCsvRowSchema],
 ) -> None:
     """Ensure responses reference active members in the roster."""
-    member_by_email = {
-        normalize_email_for_match(row.email_address): row for row in member_rows
-    }
+    member_by_email = {normalize_email_for_match(row.email_address): row for row in member_rows}
     missing_emails: list[str] = []
     inactive_names: list[str] = []
 

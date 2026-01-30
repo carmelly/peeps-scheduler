@@ -7,13 +7,13 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from peeps_scheduler.validation.fields import (
+from ..fields import (
     EventDateTime,
     EventDuration,
     PersonNameStr,
     RoleEnum,
 )
-from peeps_scheduler.validation.helpers import validate_unique
+from ..helpers import validate_unique
 
 
 class RosterEntryJsonSchema(BaseModel):

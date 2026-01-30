@@ -1,8 +1,8 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from peeps_scheduler.constants import DATE_FORMAT
-from peeps_scheduler.models import Role, SwitchPreference
+from ..constants import DATE_FORMAT
+from ..models import Role, SwitchPreference
 
 
 @dataclass(frozen=True)
@@ -134,9 +134,15 @@ def parse_switch_preference(value: str) -> SwitchPreference:
 
     if stripped == "I only want to be scheduled in my primary role":
         return SwitchPreference.PRIMARY_ONLY
-    elif stripped == "I'm happy to dance my secondary role if it lets me attend when my primary is full":
+    elif (
+        stripped
+        == "I'm happy to dance my secondary role if it lets me attend when my primary is full"
+    ):
         return SwitchPreference.SWITCH_IF_PRIMARY_FULL
-    elif stripped == "I'm willing to dance my secondary role only if it's needed to enable filling a session":
+    elif (
+        stripped
+        == "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    ):
         return SwitchPreference.SWITCH_IF_NEEDED
     else:
         raise ValueError(f"Invalid switch preference: {value}")

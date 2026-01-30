@@ -1,9 +1,9 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from peeps_scheduler.validation.file_schemas.attendance_json import (
+from ..helpers import validate_unique
+from .attendance_json import (
     BaseEventJsonSchema,
     RosterEntryJsonSchema,
 )
-from peeps_scheduler.validation.helpers import validate_unique
 
 
 class ResultEventJsonSchema(BaseEventJsonSchema):

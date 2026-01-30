@@ -8,10 +8,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from pydantic import ValidationError
-from peeps_scheduler import file_io
-from peeps_scheduler.constants import DEFAULT_TIMEZONE
-from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
-from peeps_scheduler.validation.builders import (
+from .. import file_io
+from ..constants import DEFAULT_TIMEZONE
+from ..models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
+from .builders import (
     build_attendance_events,
     build_cancelled_availability,
     build_cancelled_events,
@@ -20,9 +20,9 @@ from peeps_scheduler.validation.builders import (
     build_peeps,
     build_results_events,
 )
-from peeps_scheduler.validation.errors import FileValidationError
-from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
+from .errors import FileValidationError
+from .fields import ValidationContext
+from .file_schemas.period import PeriodFileSchema
 
 
 @dataclass(frozen=True)

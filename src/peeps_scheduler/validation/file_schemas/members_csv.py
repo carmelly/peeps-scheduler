@@ -9,13 +9,13 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from peeps_scheduler.validation.fields import (
+from ..fields import (
     OptionalEmailAddressStr,
     OptionalPersonNameStr,
     PersonNameStr,
     RoleEnum,
 )
-from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
+from ..helpers import normalize_email_for_match, validate_unique
 
 
 class MemberCsvRowSchema(BaseModel):

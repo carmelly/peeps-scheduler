@@ -9,8 +9,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from peeps_scheduler.models import SwitchPreference
-from peeps_scheduler.validation.fields import (
+from ...models import SwitchPreference
+from ..fields import (
     EmailAddressStr,
     EventNameOldFormatStr,
     EventSpecList,
@@ -18,8 +18,8 @@ from peeps_scheduler.validation.fields import (
     PersonNameStr,
     RoleEnum,
 )
-from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
-from peeps_scheduler.validation.parsers import EventSpec, parse_event_name, parse_switch_preference
+from ..helpers import normalize_email_for_match, validate_unique
+from ..parsers import EventSpec, parse_event_name, parse_switch_preference
 
 
 def _strip_parenthetical(value: str) -> str:
