@@ -1,5 +1,8 @@
 import pytest
-from peeps_scheduler.validation.helpers import normalize_email_for_match, validate_unique
+from peeps_scheduler.adapters.file.validation.helpers import (
+    normalize_email_for_match,
+    validate_unique,
+)
 
 
 @pytest.mark.unit

@@ -3,9 +3,9 @@
 import csv
 import json
 import pytest
-from peeps_scheduler.validation.errors import FileValidationError
-from peeps_scheduler.validation.period import load_and_validate_period
-from tests.validation.fixtures import (
+from peeps_scheduler.adapters.file.validation.errors import FileValidationError
+from peeps_scheduler.adapters.file.validation.period import load_and_validate_period
+from tests.adapters.file.validation.fixtures import (
     attendance_data,
     attendance_event_data,
     member_data,

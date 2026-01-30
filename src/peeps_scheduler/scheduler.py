@@ -3,10 +3,10 @@ import logging
 import time
 import peeps_scheduler.constants as constants
 from peeps_scheduler import file_io, utils
+from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
 from peeps_scheduler.topic_assignment import assign_topics_to_events
-from peeps_scheduler.validation.period import PeriodData
 
 
 class Scheduler:

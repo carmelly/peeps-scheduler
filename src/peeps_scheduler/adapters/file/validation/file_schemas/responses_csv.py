@@ -9,7 +9,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from ...models import SwitchPreference
+from peeps_scheduler.models import SwitchPreference
 from ..fields import (
     EmailAddressStr,
     EventNameOldFormatStr,

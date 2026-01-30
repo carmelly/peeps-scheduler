@@ -4,9 +4,9 @@ Tests for topic assignment behavior and results serialization.
 
 import json
 import peeps_scheduler.constants as constants
+from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.models import EventSequence, Role
 from peeps_scheduler.scheduler import Scheduler
-from peeps_scheduler.validation.period import PeriodData
 
 
 def create_topic_scheduler(period_data, tmp_path):
@@ -156,9 +156,7 @@ class TestSchedulerTopicAssignment:
         assert event_one.topic == "Topic B"
         assert event_two.topic == "Topic A"
 
-    def test_assign_topics_breaks_ties_on_min_score(
-        self, tmp_path, peep_factory, event_factory
-    ):
+    def test_assign_topics_breaks_ties_on_min_score(self, tmp_path, peep_factory, event_factory):
         peeps = [
             peep_factory(id=1, email="alice@example.com", topic_votes=["Topic A"]),
             peep_factory(id=2, email="bob@example.com", topic_votes=["Topic A"]),
@@ -227,9 +225,7 @@ class TestSchedulerTopicAssignment:
 
         assert event_one.topic == "Topic A"
 
-    def test_save_sequence_includes_topic_assignments(
-        self, tmp_path, peep_factory, event_factory
-    ):
+    def test_save_sequence_includes_topic_assignments(self, tmp_path, peep_factory, event_factory):
         peeps = [peep_factory(id=1, email="alice@example.com", topic_votes=["Topic A"])]
         event_one = event_factory(id=1)
         event_one.add_attendee(peeps[0], Role.LEADER)

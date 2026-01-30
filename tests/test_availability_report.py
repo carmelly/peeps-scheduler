@@ -1,11 +1,11 @@
 import json
 import pytest
 from pydantic import ValidationError
+from peeps_scheduler.adapters.file.validation.fields import ValidationContext
+from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.adapters.file.validation.period import load_period_files
 from peeps_scheduler.availability_report import parse_availability
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
-from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
-from peeps_scheduler.validation.period import load_period_files
 
 
 def _load_period_schema(path, year):

@@ -1,12 +1,12 @@
 import pytest
 from pydantic import ValidationError
-from peeps_scheduler.models import Role
-from peeps_scheduler.validation.file_schemas.members_csv import (
+from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from tests.validation.conftest import assert_error_for_field, assert_error_for_model
-from tests.validation.fixtures import member_data
+from peeps_scheduler.models import Role
+from tests.adapters.file.validation.conftest import assert_error_for_field, assert_error_for_model
+from tests.adapters.file.validation.fixtures import member_data
 
 pytestmark = pytest.mark.unit
 
@@ -158,12 +158,14 @@ class TestMembersCsvFileSchema:
         with pytest.raises(ValidationError) as e:
             MembersCsvFileSchema.model_validate(
                 [
-                    member_data({
-                        "id": "1",
-                        "Index": "0",
-                        "Active": "TRUE",
-                        "Email Address": "",
-                    }),
+                    member_data(
+                        {
+                            "id": "1",
+                            "Index": "0",
+                            "Active": "TRUE",
+                            "Email Address": "",
+                        }
+                    ),
                 ],
                 context={"ctx": ctx},
             )
@@ -173,12 +175,14 @@ class TestMembersCsvFileSchema:
         """Edge case: Inactive member without email should pass validation."""
         schema = MembersCsvFileSchema.model_validate(
             [
-                member_data({
-                    "id": "1",
-                    "Index": "0",
-                    "Active": "FALSE",
-                    "Email Address": "",
-                }),
+                member_data(
+                    {
+                        "id": "1",
+                        "Index": "0",
+                        "Active": "FALSE",
+                        "Email Address": "",
+                    }
+                ),
             ],
             context={"ctx": ctx},
         )

@@ -1,13 +1,15 @@
 import pytest
 from pydantic import ValidationError
-from peeps_scheduler.models import Role
-from peeps_scheduler.validation.file_schemas.attendance_json import RosterEntryJsonSchema
-from peeps_scheduler.validation.file_schemas.results_json import (
+from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
+    RosterEntryJsonSchema,
+)
+from peeps_scheduler.adapters.file.validation.file_schemas.results_json import (
     ResultEventJsonSchema,
     ResultsJsonSchema,
 )
-from tests.validation.conftest import assert_error_for_model
-from tests.validation.fixtures import result_event_data, results_data
+from peeps_scheduler.models import Role
+from tests.adapters.file.validation.conftest import assert_error_for_model
+from tests.adapters.file.validation.fixtures import result_event_data, results_data
 
 
 @pytest.mark.unit

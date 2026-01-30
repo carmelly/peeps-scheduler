@@ -13,8 +13,8 @@ import shutil
 import tempfile
 from pathlib import Path
 import pytest
+from peeps_scheduler.adapters.file.validation import FileValidationError, load_and_validate_period
 from peeps_scheduler.scheduler import Scheduler
-from peeps_scheduler.validation import FileValidationError, load_and_validate_period
 
 
 class TestEndToEndWorkflows:
@@ -135,7 +135,10 @@ class TestEndToEndWorkflows:
 
             period_data = load_and_validate_period(str(period_path), 2025)
             scheduler = Scheduler(
-                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=10,
+                interactive=False,
             )
             result = scheduler.run()
 
@@ -292,7 +295,10 @@ class TestCancellationsWorkflow:
 
             period_data = load_and_validate_period(str(period_path), 2025)
             scheduler = Scheduler(
-                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=10,
+                interactive=False,
             )
             result = scheduler.run()
 
@@ -364,7 +370,10 @@ class TestCancellationsWorkflow:
 
             period_data = load_and_validate_period(str(period_path), 2025)
             scheduler = Scheduler(
-                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=10,
+                interactive=False,
             )
             result = scheduler.run()
 
@@ -438,7 +447,10 @@ class TestCancellationsWorkflow:
 
             period_data = load_and_validate_period(str(period_path), 2025)
             scheduler = Scheduler(
-                period_data=period_data, data_folder=str(period_path), max_events=10, interactive=False
+                period_data=period_data,
+                data_folder=str(period_path),
+                max_events=10,
+                interactive=False,
             )
             result = scheduler.run()
 

@@ -1,12 +1,12 @@
 from datetime import datetime
 import pytest
-from peeps_scheduler.models import Role, SwitchPreference
-from peeps_scheduler.validation.parsers import (
+from peeps_scheduler.adapters.file.validation.parsers import (
     EventSpec,
     parse_event_name,
     parse_role,
     parse_switch_preference,
 )
+from peeps_scheduler.models import Role, SwitchPreference
 
 
 @pytest.mark.unit
@@ -148,8 +148,12 @@ class TestParseSwitchPreference:
     """Test parser function parse_switch_preference()."""
 
     PRIMARY_ONLY_STR = "I only want to be scheduled in my primary role"
-    SWITCH_IF_PRIMARY_FULL_STR = "I'm happy to dance my secondary role if it lets me attend when my primary is full"
-    SWITCH_IF_NEEDED_STR = "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    SWITCH_IF_PRIMARY_FULL_STR = (
+        "I'm happy to dance my secondary role if it lets me attend when my primary is full"
+    )
+    SWITCH_IF_NEEDED_STR = (
+        "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    )
 
     @pytest.mark.parametrize(
         "input_value,expected",

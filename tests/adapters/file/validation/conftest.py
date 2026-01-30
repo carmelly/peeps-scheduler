@@ -1,10 +1,10 @@
 from zoneinfo import ZoneInfo
 import pytest
-from peeps_scheduler.validation.fields import ValidationContext
+from peeps_scheduler.adapters.file.validation.fields import ValidationContext
 
 
 @pytest.fixture
-def ctx(): 
+def ctx():
     return ValidationContext(year=2020, tz=ZoneInfo("America/Los_Angeles"))
 
 

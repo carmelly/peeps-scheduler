@@ -2,15 +2,18 @@ import datetime
 from collections import defaultdict
 from pathlib import Path
 from pydantic import ValidationError
+from peeps_scheduler.adapters.file.validation.errors import FileValidationError
+from peeps_scheduler.adapters.file.validation.fields import ValidationContext
+from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.adapters.file.validation.helpers import normalize_email_for_match
+from peeps_scheduler.adapters.file.validation.parsers import parse_event_name
+from peeps_scheduler.adapters.file.validation.period import (
+    _infer_validation_file,
+    load_period_files,
+)
 from peeps_scheduler.constants import DATE_FORMAT, DEFAULT_TIMEZONE
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import SwitchPreference
-from peeps_scheduler.validation.errors import FileValidationError
-from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
-from peeps_scheduler.validation.helpers import normalize_email_for_match
-from peeps_scheduler.validation.parsers import parse_event_name
-from peeps_scheduler.validation.period import _infer_validation_file, load_period_files
 
 
 def _load_period_schema(period_path: Path, year: int) -> PeriodFileSchema:
@@ -28,9 +31,7 @@ def parse_availability(period_schema: PeriodFileSchema):
     member_by_email = {
         normalize_email_for_match(row.email_address): row for row in members if row.email_address
     }
-    event_name_by_start = {
-        event.start: event.raw for event in period_schema.responses.events
-    }
+    event_name_by_start = {event.start: event.raw for event in period_schema.responses.events}
     event_id_by_start = {
         event.start: event.start.strftime(DATE_FORMAT) for event in period_schema.responses.events
     }

@@ -1,14 +1,14 @@
 from datetime import datetime
 import pytest
 from pydantic import ValidationError
-from peeps_scheduler.models import Role
-from peeps_scheduler.validation.file_schemas.attendance_json import (
+from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
     ActualAttendanceJsonSchema,
     AttendanceEventJsonSchema,
     RosterEntryJsonSchema,
 )
-from tests.validation.conftest import assert_error_for_model
-from tests.validation.fixtures import attendance_data, attendance_event_data
+from peeps_scheduler.models import Role
+from tests.adapters.file.validation.conftest import assert_error_for_model
+from tests.adapters.file.validation.fixtures import attendance_data, attendance_event_data
 
 
 @pytest.mark.unit
@@ -59,9 +59,7 @@ class TestAttendanceEventJsonSchema:
 @pytest.mark.unit
 class TestActualAttendanceJsonSchema:
     def test_valid_defaults(self, ctx):
-        schema = ActualAttendanceJsonSchema.model_validate(
-            attendance_data(), context={"ctx": ctx}
-        )
+        schema = ActualAttendanceJsonSchema.model_validate(attendance_data(), context={"ctx": ctx})
 
         assert isinstance(schema.valid_events, list)
         assert len(schema.valid_events) == 1
@@ -71,12 +69,8 @@ class TestActualAttendanceJsonSchema:
         data = attendance_data(
             {
                 "valid_events": [
-                    attendance_event_data(
-                        {"id": 1, "date": "2020-01-04 13:00"}
-                    ),
-                    attendance_event_data(
-                        {"id": 2, "date": "2020-01-04 13:00"}
-                    ),
+                    attendance_event_data({"id": 1, "date": "2020-01-04 13:00"}),
+                    attendance_event_data({"id": 2, "date": "2020-01-04 13:00"}),
                 ]
             }
         )
@@ -90,12 +84,8 @@ class TestActualAttendanceJsonSchema:
         data = attendance_data(
             {
                 "valid_events": [
-                    attendance_event_data(
-                        {"id": 1, "date": "2020-01-04 13:00"}
-                    ),
-                    attendance_event_data(
-                        {"id": 1, "date": "2020-01-11 13:00"}
-                    ),
+                    attendance_event_data({"id": 1, "date": "2020-01-04 13:00"}),
+                    attendance_event_data({"id": 1, "date": "2020-01-11 13:00"}),
                 ]
             }
         )

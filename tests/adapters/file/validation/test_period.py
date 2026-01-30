@@ -5,20 +5,20 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 import pytest
+from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.adapters.file.validation.period import (
+    PeriodData,
+    load_and_validate_period,
+    to_period_data,
+)
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
     PartnershipRequest,
     Peep,
 )
-from peeps_scheduler.validation.file_schemas.period import PeriodFileSchema
-from peeps_scheduler.validation.period import (
-    PeriodData,
-    load_and_validate_period,
-    to_period_data,
-)
-from tests.validation.file_schemas.test_period import period_data
-from tests.validation.fixtures import event_row_data, response_data
+from tests.adapters.file.validation.file_schemas.test_period import period_data
+from tests.adapters.file.validation.fixtures import event_row_data, response_data
 
 pytestmark = pytest.mark.integration
 

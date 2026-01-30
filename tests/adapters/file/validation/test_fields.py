@@ -1,8 +1,7 @@
 from datetime import datetime
 import pytest
 from pydantic import BaseModel, ValidationError
-from peeps_scheduler.models import Role
-from peeps_scheduler.validation.fields import (
+from peeps_scheduler.adapters.file.validation.fields import (
     MAX_EMAIL_LENGTH,
     MAX_PERSON_NAME_LENGTH,
     EmailAddressStr,
@@ -13,8 +12,9 @@ from peeps_scheduler.validation.fields import (
     PersonNameStr,
     RoleEnum,
 )
-from peeps_scheduler.validation.parsers import EventSpec, parse_event_name
-from tests.validation.conftest import assert_error_for_field
+from peeps_scheduler.adapters.file.validation.parsers import EventSpec, parse_event_name
+from peeps_scheduler.models import Role
+from tests.adapters.file.validation.conftest import assert_error_for_field
 
 pytestmark = pytest.mark.unit
 

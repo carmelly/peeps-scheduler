@@ -3,18 +3,22 @@
 from unittest.mock import Mock
 import pytest
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
-from peeps_scheduler.validation.errors import FileValidationError, MultiFileValidationError
+from peeps_scheduler.adapters.file.validation.errors import (
+    FileValidationError,
+    MultiFileValidationError,
+)
 
 
 class SimpleModel(BaseModel):
     """Simple model for generating validation errors."""
+
     email: EmailStr
     role: str
 
-    @field_validator('role')
+    @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        allowed = {'leader', 'follower'}
+        allowed = {"leader", "follower"}
         if v not in allowed:
             raise ValueError(f"expected 'leader' or 'follower', got '{v}'")
         return v
@@ -58,9 +62,9 @@ class TestFileValidationErrorErrorsMethod:
 
         # Check Pydantic fields present
         for err in errors:
-            assert 'loc' in err
-            assert 'msg' in err
-            assert 'type' in err
+            assert "loc" in err
+            assert "msg" in err
+            assert "type" in err
 
         # Check it matches underlying error
         assert errors == validation_error.errors()
@@ -75,7 +79,7 @@ class TestFileValidationErrorStringFormat:
         error = FileValidationError("members.csv", validation_error)
 
         result = str(error)
-        lines = result.split('\n')
+        lines = result.split("\n")
 
         # Header format check
         assert lines[0] == "Validation failed in members.csv:"
@@ -83,18 +87,21 @@ class TestFileValidationErrorStringFormat:
         # Indentation check
         for line in lines[1:]:
             if line.strip():  # Non-empty lines
-                assert line.startswith('  '), f"Line not indented: {line}"
+                assert line.startswith("  "), f"Line not indented: {line}"
 
         # Content checks
         assert "members.csv" in result
         assert len(result) > len("Validation failed in members.csv:")
 
-    @pytest.mark.parametrize("filename", [
-        "events.csv",
-        "data/input/members.csv",
-        "members (2024-01-01).csv",
-        "成員.csv",
-    ])
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "events.csv",
+            "data/input/members.csv",
+            "members (2024-01-01).csv",
+            "成員.csv",
+        ],
+    )
     def test_str_with_various_filenames(self, validation_error, filename):
         """Test string format works with various filename formats."""
         error = FileValidationError(filename, validation_error)
@@ -111,6 +118,7 @@ class TestFileValidationErrorTruncation:
 
     def test_truncates_errors_at_10_with_more_message(self):
         """Test that more than 10 errors is truncated with '... and N more errors'."""
+
         class ManyFieldsModel(BaseModel):
             f1: int
             f2: int
@@ -126,15 +134,26 @@ class TestFileValidationErrorTruncation:
             f12: int
 
         try:
-            ManyFieldsModel(f1="x", f2="x", f3="x", f4="x", f5="x",
-                          f6="x", f7="x", f8="x", f9="x", f10="x",
-                          f11="x", f12="x")
+            ManyFieldsModel(
+                f1="x",
+                f2="x",
+                f3="x",
+                f4="x",
+                f5="x",
+                f6="x",
+                f7="x",
+                f8="x",
+                f9="x",
+                f10="x",
+                f11="x",
+                f12="x",
+            )
         except ValidationError as ve:
             error = FileValidationError("data.csv", ve)
             result = str(error)
 
             # Count error lines
-            error_lines = [line for line in result.split('\n')[1:] if line.startswith('  ')]
+            error_lines = [line for line in result.split("\n")[1:] if line.startswith("  ")]
 
             # Should not exceed ~11 lines (10 errors + more message)
             assert len(error_lines) <= 11
@@ -174,7 +193,7 @@ class TestFileValidationErrorUseCases:
         result = str(error)
         # Output should be substantive
         assert "Validation failed in members.csv:" in result
-        error_lines = [line for line in result.split('\n')[1:] if line.strip()]
+        error_lines = [line for line in result.split("\n")[1:] if line.strip()]
         assert len(error_lines) >= 2
 
     def test_row_based_error_formatting(self):
@@ -183,14 +202,14 @@ class TestFileValidationErrorUseCases:
         mock_ve = Mock(spec=ValidationError)
         mock_ve.errors.return_value = [
             {
-                'loc': (3, 'email'),
-                'msg': 'invalid email format',
-                'type': 'value_error',
+                "loc": (3, "email"),
+                "msg": "invalid email format",
+                "type": "value_error",
             },
             {
-                'loc': (7, 'role'),
-                'msg': "expected 'leader' or 'follower', got 'dancer'",
-                'type': 'value_error',
+                "loc": (7, "role"),
+                "msg": "expected 'leader' or 'follower', got 'dancer'",
+                "type": "value_error",
             },
         ]
 

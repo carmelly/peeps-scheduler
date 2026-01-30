@@ -1,6 +1,6 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from ..models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
+from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
 from .file_schemas.attendance_json import ActualAttendanceJsonSchema
 from .file_schemas.members_csv import MemberCsvRowSchema
 from .file_schemas.period import (

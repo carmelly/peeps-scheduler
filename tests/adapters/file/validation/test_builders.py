@@ -2,16 +2,7 @@
 
 import datetime
 import pytest
-from peeps_scheduler.constants import DEFAULT_TIMEZONE
-from peeps_scheduler.models import (
-    CancelledMemberAvailability,
-    Event,
-    PartnershipRequest,
-    Peep,
-    Role,
-    SwitchPreference,
-)
-from peeps_scheduler.validation.builders import (
+from peeps_scheduler.adapters.file.validation.builders import (
     _event_spec_to_event,
     _member_to_peep,
     build_attendance_events,
@@ -22,19 +13,32 @@ from peeps_scheduler.validation.builders import (
     build_peeps,
     build_results_events,
 )
-from peeps_scheduler.validation.fields import ValidationContext
-from peeps_scheduler.validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
-from peeps_scheduler.validation.file_schemas.members_csv import (
+from peeps_scheduler.adapters.file.validation.fields import ValidationContext
+from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
+    ActualAttendanceJsonSchema,
+)
+from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
     MembersCsvFileSchema,
 )
-from peeps_scheduler.validation.file_schemas.period import (
+from peeps_scheduler.adapters.file.validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
 )
-from peeps_scheduler.validation.file_schemas.responses_csv import ResponsesCsvFileSchema
-from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
-from peeps_scheduler.validation.parsers import EventSpec
-from tests.validation.fixtures import (
+from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import (
+    ResponsesCsvFileSchema,
+)
+from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
+from peeps_scheduler.adapters.file.validation.parsers import EventSpec
+from peeps_scheduler.constants import DEFAULT_TIMEZONE
+from peeps_scheduler.models import (
+    CancelledMemberAvailability,
+    Event,
+    PartnershipRequest,
+    Peep,
+    Role,
+    SwitchPreference,
+)
+from tests.adapters.file.validation.fixtures import (
     attendance_data,
     attendance_event_data,
     member_data,
@@ -528,7 +532,7 @@ class TestBuildPartnerships:
 
     def test_builds_empty_partnerships_for_no_requests(self, peep_factory, ctx):
         """Edge case: Returns empty list when no partnership requests provided."""
-        from peeps_scheduler.validation.builders import build_partnerships
+        from peeps_scheduler.adapters.file.validation.builders import build_partnerships
 
         requests = []
         peeps = [peep_factory(id=1, email="alice@example.com")]

@@ -4,9 +4,9 @@ import os
 import sys
 from pathlib import Path
 from peeps_scheduler import constants, utils
+from peeps_scheduler.adapters.file.validation import FileValidationError, load_and_validate_period
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.scheduler import Scheduler
-from peeps_scheduler.validation import FileValidationError, load_and_validate_period
 
 
 def apply_results(period_folder):

@@ -1,14 +1,14 @@
 from datetime import datetime
 import pytest
 from pydantic import ValidationError
-from peeps_scheduler.validation.file_schemas.responses_csv import (
+from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import (
     EventRowCsvSchema,
     ResponseCsvRowSchema,
     ResponsesCsvFileSchema,
 )
-from peeps_scheduler.validation.parsers import EventSpec
-from tests.validation.conftest import assert_error_for_field, assert_error_for_model
-from tests.validation.fixtures import event_row_data, response_data
+from peeps_scheduler.adapters.file.validation.parsers import EventSpec
+from tests.adapters.file.validation.conftest import assert_error_for_field, assert_error_for_model
+from tests.adapters.file.validation.fixtures import event_row_data, response_data
 
 pytestmark = pytest.mark.unit
 
@@ -45,11 +45,7 @@ class TestResponseCsvRowSchema:
 
     def test_deep_dive_topics_parses_list(self, ctx):
         row = response_data(
-            {
-                "Deep Dive Topics": (
-                    "Balance for Spins and Turns, Angles for Shaping & Slotting"
-                )
-            }
+            {"Deep Dive Topics": ("Balance for Spins and Turns, Angles for Shaping & Slotting")}
         )
         schema = ResponseCsvRowSchema.model_validate(row, context={"ctx": ctx})
         assert schema.deep_dive_topics == [
@@ -264,14 +260,10 @@ class TestResponsesCsvFileSchema:
         """Test event_rows used for events when they exist (availability not used)."""
         schema = ResponsesCsvFileSchema.model_validate(
             {
-                "responses": [
-                    response_data({"Availability": "Saturday January 4 - 1pm"})
-                ],
+                "responses": [response_data({"Availability": "Saturday January 4 - 1pm"})],
                 "event_rows": [
                     event_row_data({"Name": "Saturday January 4 - 1pm", "Event Duration": "120"}),
-                    event_row_data(
-                        {"Name": "Friday January 10 - 6:30pm", "Event Duration": "90"}
-                    ),
+                    event_row_data({"Name": "Friday January 10 - 6:30pm", "Event Duration": "90"}),
                 ],
             },
             context={"ctx": ctx},

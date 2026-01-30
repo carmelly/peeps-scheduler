@@ -1,8 +1,8 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from ..constants import DATE_FORMAT
-from ..models import Role, SwitchPreference
+from peeps_scheduler.constants import DATE_FORMAT
+from peeps_scheduler.models import Role, SwitchPreference
 
 
 @dataclass(frozen=True)

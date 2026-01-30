@@ -8,9 +8,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from pydantic import ValidationError
-from .. import file_io
-from ..constants import DEFAULT_TIMEZONE
-from ..models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
+from peeps_scheduler import file_io
+from peeps_scheduler.constants import DEFAULT_TIMEZONE
+from peeps_scheduler.models import CancelledMemberAvailability, Event, PartnershipRequest, Peep
 from .builders import (
     build_attendance_events,
     build_cancelled_availability,

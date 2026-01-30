@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 from pydantic import AfterValidator, BeforeValidator, EmailStr, PositiveInt, StringConstraints
-from ..constants import CLASS_CONFIG
-from ..models import Role
+from peeps_scheduler.constants import CLASS_CONFIG
+from peeps_scheduler.models import Role
 from .helpers import validate_unique
 from .parsers import (
     EventSpec,

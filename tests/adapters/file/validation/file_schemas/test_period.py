@@ -1,11 +1,11 @@
 import pytest
 from pydantic import ValidationError
-from peeps_scheduler.validation.file_schemas.attendance_json import (
+from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
     ActualAttendanceJsonSchema,
     RosterEntryJsonSchema,
 )
-from peeps_scheduler.validation.file_schemas.members_csv import MemberCsvRowSchema
-from peeps_scheduler.validation.file_schemas.period import (
+from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import MemberCsvRowSchema
+from peeps_scheduler.adapters.file.validation.file_schemas.period import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
     PeriodFileSchema,
@@ -16,10 +16,10 @@ from peeps_scheduler.validation.file_schemas.period import (
     validate_roster_entries,
     validate_topics,
 )
-from peeps_scheduler.validation.file_schemas.responses_csv import ResponseCsvRowSchema
-from peeps_scheduler.validation.file_schemas.results_json import ResultsJsonSchema
-from peeps_scheduler.validation.parsers import parse_event_name
-from tests.validation.conftest import assert_error_for_model
+from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import ResponseCsvRowSchema
+from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
+from peeps_scheduler.adapters.file.validation.parsers import parse_event_name
+from tests.adapters.file.validation.conftest import assert_error_for_model
 
 pytestmark = pytest.mark.unit
 
@@ -639,9 +639,7 @@ class TestValidateResponseMembers:
         responses = [
             ResponseCsvRowSchema.model_validate(response_data(), context={"ctx": ctx}),
             ResponseCsvRowSchema.model_validate(
-                response_data(
-                    {"Email Address": "gamma@test.com", "Name": "Inactive Gamma"}
-                ),
+                response_data({"Email Address": "gamma@test.com", "Name": "Inactive Gamma"}),
                 context={"ctx": ctx},
             ),
         ]
