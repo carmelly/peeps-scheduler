@@ -12,8 +12,10 @@ htmlcov/
 
 # AI Agent Configuration (symlinked from peeps-config/overlay/)
 /.claude
+/.codex
 /.apm
 CLAUDE.md
+
 
 # Virtual environment
 .venv
