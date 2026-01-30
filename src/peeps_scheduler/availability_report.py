@@ -1,5 +1,5 @@
-from collections import defaultdict
 import datetime
+from collections import defaultdict
 from pathlib import Path
 from pydantic import ValidationError
 from peeps_scheduler.constants import DATE_FORMAT, DEFAULT_TIMEZONE
