@@ -1,3 +1,4 @@
+import datetime
 import json
 import pytest
 from peeps_scheduler.adapters.file.saver import FilePeriodSaver, _sequence_to_dict
@@ -22,8 +23,8 @@ def _get_saver(period_root, period_slug) -> FilePeriodSaver:
     return FilePeriodSaver(period_root)
 
 
-@pytest.mark.integration
-class TestFilePeriodSaverIntegration:
+@pytest.mark.unit
+class TestFileSaving:
     def test_save_results_writes_json(self, period_root, period_slug, event_factory, sample_peeps):
         saver = _get_saver(period_root, period_slug)
 
@@ -147,3 +148,46 @@ class TestSequenceToDict:
         assert follower_data["role"] == "leader"  # Scheduled as leader
         assert leader_data["role"] == "follower"  # Scheduled as follower
         assert leader2_data["role"] == "leader"  # Scheduled as leader (primary)
+
+
+class TestSaveJson:
+    """Tests for the _save_json method of FilePeriodSaver."""
+
+    def test_serializes_dates(self, tmp_path):
+        """Test save_json handles datetime.date, datetime.datetime, and fallback types."""
+        data = {
+            "today": datetime.date(2025, 7, 21),
+            "now": datetime.datetime(2025, 7, 21, 15, 0),
+            "fallback": {"custom": "data"},
+        }
+        saver = _get_saver(tmp_path, "test_period")
+        output_path = tmp_path / "test_period" / "output.json"
+        saver._save_json(data, output_path)
+
+        loaded = json.loads(output_path.read_text())
+        assert loaded["today"] == "2025-07-21"
+        assert "2025" in loaded["now"]
+        assert isinstance(loaded["fallback"], dict)
+
+    def test_serializes_enum(self, tmp_path):
+        """Ensure save_json uses .value for Enums."""
+        data = {"role": Role.LEADER}
+        saver = _get_saver(tmp_path, "test_period")
+        output_path = tmp_path / "test_period" / "output.json"
+        saver._save_json(data, output_path)
+
+        result = json.loads(output_path.read_text())
+        assert result["role"] == "leader"
+
+    def test_fallback_str_for_unknown_type(self, tmp_path):
+        """Ensure save_json falls back to str(obj) for unknown types like set."""
+        data = {"example": {1, 2, 3}}  # sets are not JSON serializable by default
+        saver = _get_saver(tmp_path, "test_period")
+        output_path = tmp_path / "test_period" / "output.json"
+        saver._save_json(data, output_path)
+
+        with output_path.open() as f:
+            contents = json.load(f)
+
+        # The set should have been stringified like "{1, 2, 3}"
+        assert contents["example"].startswith("{") and "1" in contents["example"]

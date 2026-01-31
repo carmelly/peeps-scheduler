@@ -2,7 +2,6 @@ import datetime
 from collections import defaultdict
 from pathlib import Path
 from peeps_scheduler.adapters.file.loader import FilePeriodLoader
-from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import PeriodData, SwitchPreference
 
 
@@ -81,8 +80,6 @@ def print_availability(
 
 def run_availability_report(data_folder):
     """Generate and print availability report for a given data period."""
-    dm = get_data_manager()
-    period_path = dm.get_period_path(data_folder)
 
     # Extract year from data_folder (e.g., "2026-01" -> 2026)
     # Handle both absolute paths and folder names
@@ -98,7 +95,7 @@ def run_availability_report(data_folder):
     if year is None:
         year = datetime.datetime.now().year
 
-    loader = FilePeriodLoader(Path(period_path).parent, year, True, False)
+    loader = FilePeriodLoader(Path(data_folder).parent, year, True, False)
     period_data: PeriodData = loader.load_period(folder_name)
     availability, unavailable, non_responders = parse_availability(period_data)
 

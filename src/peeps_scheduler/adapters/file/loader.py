@@ -1,10 +1,15 @@
 import csv
 import json
 import re
+from datetime import date
 from pathlib import Path
 from peeps_scheduler.adapters.file.mappers import map_period
 from peeps_scheduler.adapters.file.validation.period import PeriodData, validate_period_data
 from peeps_scheduler.adapters.protocols import PeriodLoader
+from peeps_scheduler.constants import PRIVATE_DATA_ROOT
+
+DEFAULT_BASE_PATH = Path(PRIVATE_DATA_ROOT) / "original"
+DEFAULT_SCHEDULER_YEAR = date.today().year
 
 CsvRow = dict[str, str]  # Type alias for a CSV row represented as a dictionary
 
@@ -82,8 +87,8 @@ def _load_json_file(path: Path, required: bool = False) -> dict:
 class FilePeriodLoader(PeriodLoader):
     def __init__(
         self,
-        base_path: Path,
-        year: int,
+        base_path: Path = DEFAULT_BASE_PATH,
+        year: int = DEFAULT_SCHEDULER_YEAR,
         require_responses: bool = True,
         require_attendance: bool = False,
     ) -> None:
@@ -91,6 +96,15 @@ class FilePeriodLoader(PeriodLoader):
         self.year = year
         self.require_responses = require_responses
         self.require_attendance = require_attendance
+
+    def list_periods(self) -> list[str]:
+        """List all available periods in the base path."""
+        periods = []
+        for item in self.base_path.iterdir():
+            if item.is_dir():
+                periods.append(item.name)
+
+        return sorted(periods)
 
     def load_period(self, period_slug: str) -> PeriodData:
         period_path = self.base_path / period_slug

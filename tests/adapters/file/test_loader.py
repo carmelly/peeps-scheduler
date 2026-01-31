@@ -33,23 +33,65 @@ def _write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) ->
         writer.writerows(rows)
 
 
-@pytest.mark.integration
-class TestFilePeriodLoaderIntegration:
-    def test_load_period_returns_period_data(self, period_root, period_slug, period_dir):
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
+def _write_members_csv(base_path: Path, members: list[dict[str, str]]) -> None:
+    fieldnames = [
+        "id",
+        "Name",
+        "Display Name",
+        "Email Address",
+        "Role",
+        "Index",
+        "Priority",
+        "Total Attended",
+        "Active",
+        "Date Joined",
+    ]
+    _write_csv(base_path / "members.csv", fieldnames, members)
 
-        period_data = loader.load_period(period_slug)
+
+def _write_responses_csv(base_path: Path, responses: list[dict[str, str]]) -> None:
+    fieldnames = [
+        "Timestamp",
+        "Name",
+        "Display Name",
+        "Email Address",
+        "Primary Role",
+        "Secondary Role",
+        "Max Sessions",
+        "Availability",
+        "Min Interval Days",
+        "Deep Dive Topics",
+    ]
+    _write_csv(base_path / "responses.csv", fieldnames, responses)
+
+
+def _get_loader(period_dir, require_responses=True, require_attendance=False):
+    period_root = period_dir.parent
+    return FilePeriodLoader(
+        base_path=period_root,
+        year=2020,
+        require_responses=require_responses,
+        require_attendance=require_attendance,
+    )
+
+
+def _load_period(period_dir, require_responses=True, require_attendance=False):
+    period_slug = period_dir.name
+    loader = _get_loader(period_dir, require_responses, require_attendance)
+    return loader.load_period(period_slug)
+
+
+@pytest.mark.unit
+class TestPeriodLoading:
+    def test_load_period_returns_period_data(self, period_dir):
+        period_data = _load_period(period_dir)
 
         assert isinstance(period_data, PeriodData)
         assert len(period_data.peeps) >= 1
         assert len(period_data.events) >= 1
 
-    def test_load_period_validates_cross_file_constraints(
-        self, period_root, period_slug, period_dir
-    ):
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
-
-        period_data = loader.load_period(period_slug)
+    def test_load_period_validates_cross_file_constraints(self, period_dir):
+        period_data = _load_period(period_dir)
 
         assert isinstance(period_data.peeps, list)
         assert isinstance(period_data.events, list)
@@ -57,10 +99,8 @@ class TestFilePeriodLoaderIntegration:
         assert isinstance(period_data.partnership_requests, list)
         assert isinstance(period_data.topics, list)
 
-    def test_load_period_happy_path_comprehensive(self, period_root, period_slug, period_dir):
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
-
-        period_data = loader.load_period(period_slug)
+    def test_load_period_happy_path_comprehensive(self, period_dir):
+        period_data = _load_period(period_dir)
 
         assert isinstance(period_data, PeriodData)
         assert isinstance(period_data.cancelled_member_availability, list)
@@ -98,80 +138,7 @@ class TestFilePeriodLoaderIntegration:
             "Angles for Shaping & Slotting",
         ]
 
-    def test_load_period_includes_attendance_when_present(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-
-        members = [
-            member_data(
-                {
-                    "id": "1",
-                    "Name": "Alice Alpha",
-                    "Display Name": "Alice",
-                    "Email Address": "alice@test.com",
-                }
-            ),
-            member_data(
-                {
-                    "id": "2",
-                    "Name": "Bob Beta",
-                    "Display Name": "Bob",
-                    "Email Address": "bob@test.com",
-                    "Role": "Follower",
-                    "Index": "1",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
-
-        responses = [
-            response_data(
-                {
-                    "Name": "Alice Alpha",
-                    "Display Name": "Alice",
-                    "Email Address": "alice@test.com",
-                }
-            ),
-            response_data(
-                {
-                    "Name": "Bob Beta",
-                    "Display Name": "Bob",
-                    "Email Address": "bob@test.com",
-                    "Primary Role": "Follower",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            responses,
-        )
-
+    def test_load_period_includes_attendance_when_present(self, period_dir):
         attendance_payload = attendance_data(
             {
                 "valid_events": [
@@ -191,79 +158,32 @@ class TestFilePeriodLoaderIntegration:
         )
         (period_dir / "actual_attendance.json").write_text(json.dumps(attendance_payload))
 
-        loader = FilePeriodLoader(base_path=period_root, year=2020, require_responses=False)
-        period_data = loader.load_period(period_slug)
+        period_data = _load_period(period_dir, require_responses=False)
 
-        assert len(period_data.attendance_events) == 1
+        assert period_data.attendance_events[0].attendees[0].name == "Alice"
+        assert period_data.attendance_events[0].attendees[1].name == "Bob"
 
-    def test_load_period_allows_missing_responses_when_require_responses_false(
-        self, period_root, period_slug
-    ):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
+    def test_load_period_allows_missing_responses_when_flag_false(self, period_dir):
+        (period_dir / "responses.csv").unlink()
+        (period_dir / "period_config.json").unlink()  # to avoid validation errors
 
-        members = [
-            member_data(
-                {
-                    "id": "1",
-                    "Name": "Alice Alpha",
-                    "Display Name": "Alice",
-                    "Email Address": "alice@test.com",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
+        period_data = _load_period(period_dir, require_responses=False)
 
-        loader = FilePeriodLoader(base_path=period_root, year=2020, require_responses=False)
-        period_data = loader.load_period(period_slug)
+        assert not Path(period_dir / "responses.csv").exists()
+        assert len(period_data.peeps) == 3
+        assert not any(peep.responded for peep in period_data.peeps)
 
-        assert len(period_data.peeps) == 1
+    def test_load_period_requires_responses_by_default(self, period_dir):
+        (period_dir / "responses.csv").unlink()
 
-    def test_load_period_requires_responses_when_results_present(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
+        with pytest.raises(FileNotFoundError) as exc_info:
+            _load_period(period_dir)
 
-        members = [
-            member_data(
-                {
-                    "id": "1",
-                    "Name": "Alice Alpha",
-                    "Display Name": "Alice",
-                    "Email Address": "alice@test.com",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
+        assert str(period_dir / "responses.csv") in str(exc_info.value)
+
+    def test_load_period_requires_responses_when_results_present(self, period_dir):
+        (period_dir / "responses.csv").unlink()
+        (period_dir / "period_config.json").unlink()  # to avoid validation errors
 
         results_payload = {
             "valid_events": [
@@ -278,165 +198,19 @@ class TestFilePeriodLoaderIntegration:
         }
         (period_dir / "results.json").write_text(json.dumps(results_payload))
 
-        loader = FilePeriodLoader(base_path=period_root, year=2020, require_responses=False)
-
+        # Should raise FileValidationError because results cannot be validated without responses
         with pytest.raises(FileValidationError):
-            loader.load_period(period_slug)
+            _load_period(period_dir, require_responses=False)
 
-    def test_load_period_uses_base_path_and_slug(self, tmp_path):
-        base_path = tmp_path / "original"
-        base_path.mkdir()
-        period_slug = "2020-03"
-
-        period_dir = base_path / period_slug
-        period_dir.mkdir()
-        members = [
-            member_data(
-                {
-                    "id": "7",
-                    "Name": "Unique Name",
-                    "Display Name": "Unique",
-                    "Email Address": "unique@test.com",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            [
-                response_data(
-                    {
-                        "Name": "Unique Name",
-                        "Display Name": "Unique",
-                        "Email Address": "unique@test.com",
-                    }
-                )
-            ],
-        )
-
-        loader = FilePeriodLoader(base_path=base_path, year=2020)
-        period_data = loader.load_period(period_slug)
-
-        assert period_data.peeps[0].full_name == "Unique Name"
-
-    def test_load_period_requires_attendance_when_flag_true(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            [member_data({"id": "1"})],
-        )
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            [response_data({"Email Address": "alice@test.com"})],
-        )
-
-        loader = FilePeriodLoader(
-            base_path=period_root,
-            year=2020,
-            require_attendance=True,
-        )
-
+    def test_load_period_requires_attendance_when_flag_true(self, period_dir):
+        # default period_dir does not include actual_attendance.json
         with pytest.raises(FileNotFoundError) as exc_info:
-            loader.load_period(period_slug)
+            _load_period(period_dir, require_attendance=True)
 
         assert str(period_dir / "actual_attendance.json") in str(exc_info.value)
 
-    def test_load_period_includes_results_when_present(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-
-        members = [
-            member_data(
-                {
-                    "id": "1",
-                    "Name": "Alice Alpha",
-                    "Display Name": "Alice",
-                    "Email Address": "alice@test.com",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            [response_data({"Email Address": "alice@test.com"})],
-        )
+    def test_load_period_includes_results_when_present(self, period_dir):
+        # add results.json to period_dir
         results_payload = {
             "valid_events": [
                 {
@@ -452,183 +226,35 @@ class TestFilePeriodLoaderIntegration:
         }
         (period_dir / "results.json").write_text(json.dumps(results_payload))
 
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
-        period_data = loader.load_period(period_slug)
+        period_data = _load_period(period_dir)
 
         assert len(period_data.results_events) == 1
 
-    def test_load_period_missing_members_raises_file_not_found(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            [response_data({"Email Address": "alice@test.com"})],
-        )
-
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
+    def test_load_period_missing_members_raises_file_not_found(self, period_dir):
+        (period_dir / "members.csv").unlink()
 
         with pytest.raises(FileNotFoundError) as exc_info:
-            loader.load_period(period_slug)
+            _load_period(period_dir)
 
         assert str(period_dir / "members.csv") in str(exc_info.value)
 
-    def test_load_period_missing_responses_raises_file_not_found_by_default(
-        self, period_root, period_slug
-    ):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            [member_data({"id": "1"})],
-        )
-
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
-
-        with pytest.raises(FileNotFoundError) as exc_info:
-            loader.load_period(period_slug)
-
-        assert str(period_dir / "responses.csv") in str(exc_info.value)
-
-    def test_load_period_propagates_file_validation_error_with_filename(
-        self, period_root, period_slug
-    ):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
-
-        members = [
-            member_data(
-                {
-                    "id": "1",
-                    "Name": "Invalid Member",
-                    "Display Name": "Invalid",
-                    "Email Address": "",
-                }
-            ),
-        ]
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            members,
-        )
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
-            [response_data({"Email Address": "invalid@test.com"})],
-        )
-
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
+    def test_load_period_propagates_file_validation_error_with_filename(self, period_dir):
+        # Write invalid members.csv (missing Email Address)
+        members = [member_data({"Email Address": ""})]
+        _write_members_csv(period_dir, members)
 
         with pytest.raises(FileValidationError) as exc_info:
-            loader.load_period(period_slug)
+            _load_period(period_dir)
 
         assert exc_info.value.filename == "members.csv"
 
-    def test_load_period_handles_missing_period_config_file(self, period_root, period_slug):
-        period_dir = period_root / period_slug
-        period_dir.mkdir(parents=True)
+    def test_load_period_handles_missing_period_config_file(self, period_dir):
+        # Remove period_config.json
+        (period_dir / "period_config.json").unlink()
 
-        _write_csv(
-            period_dir / "members.csv",
-            [
-                "id",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Role",
-                "Index",
-                "Priority",
-                "Total Attended",
-                "Active",
-                "Date Joined",
-            ],
-            [
-                member_data(
-                    {
-                        "id": "1",
-                        "Name": "Alice Alpha",
-                        "Display Name": "Alice",
-                        "Email Address": "alice@test.com",
-                    }
-                ),
-                member_data(
-                    {
-                        "id": "2",
-                        "Name": "Bob Beta",
-                        "Display Name": "Bob",
-                        "Email Address": "bob@test.com",
-                        "Role": "Follower",
-                        "Index": "1",
-                    }
-                ),
-                member_data(
-                    {
-                        "id": "3",
-                        "Name": "Carol Clark",
-                        "Display Name": "Carol",
-                        "Email Address": "carol@test.com",
-                        "Role": "Leader",
-                        "Index": "2",
-                    }
-                ),
-            ],
-        )
-        _write_csv(
-            period_dir / "responses.csv",
-            [
-                "Timestamp",
-                "Name",
-                "Display Name",
-                "Email Address",
-                "Primary Role",
-                "Secondary Role",
-                "Max Sessions",
-                "Availability",
-                "Min Interval Days",
-            ],
+        # Write responses with no deep dive topics to avoid validation errors
+        _write_responses_csv(
+            period_dir,
             [
                 response_data(
                     {
@@ -657,8 +283,7 @@ class TestFilePeriodLoaderIntegration:
             ],
         )
 
-        loader = FilePeriodLoader(base_path=period_root, year=2020)
-        period_data = loader.load_period(period_slug)
+        period_data = _load_period(period_dir)
 
         assert isinstance(period_data, PeriodData)
         assert period_data.cancelled_events == []
@@ -751,6 +376,20 @@ class TestFilePeriodLoaderIntegration:
 
 @pytest.mark.unit
 class TestFilePeriodLoaderHelpers:
+    def test_list_periods(self, period_root):
+        """Test that FilePeriodLoader correctly lists existing periods."""
+        (period_root / "2020-01").mkdir()
+        (period_root / "2020-02").mkdir()
+        (period_root / "different_format_period").mkdir()
+        (period_root / "not_a_period.txt").touch()
+
+        loader = FilePeriodLoader(base_path=period_root)
+        periods = loader.list_periods()
+        assert "2020-01" in periods
+        assert "2020-02" in periods
+        assert "different_format_period" in periods
+        assert "not_a_period.txt" not in periods
+
     @pytest.mark.parametrize(
         "value,expected",
         [
@@ -798,3 +437,15 @@ class TestFilePeriodLoaderHelpers:
 
         assert event_rows == []
         assert response_rows == rows
+
+
+class TestFilePeriodLoaderDefaults:
+    def test_default_base_path_is_correct(self):
+        loader = FilePeriodLoader()
+        expected_base_path = Path("peeps-data") / "original"
+        assert loader.base_path == expected_base_path
+
+    def test_default_year_is_current_year(self):
+        current_year = datetime.now().year
+        loader = FilePeriodLoader()
+        assert loader.year == current_year

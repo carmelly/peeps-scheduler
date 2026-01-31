@@ -3,10 +3,9 @@ import logging
 import time
 from pathlib import Path
 import peeps_scheduler.constants as constants
-from peeps_scheduler import file_io, utils
+from peeps_scheduler import utils
 from peeps_scheduler.adapters.file.saver import FilePeriodSaver
 from peeps_scheduler.adapters.file.validation.period import PeriodData
-from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
 from peeps_scheduler.topic_assignment import assign_topics_to_events
 
@@ -27,11 +26,10 @@ class Scheduler:
         self.sequence_choice = (
             sequence_choice  # Which tied sequence to auto-select in non-interactive mode
         )
-        self.data_manager = get_data_manager()
         self.partnership_requests = period_data.partnership_requests
 
         # Ensure period directory exists
-        self.period_path = self.data_manager.ensure_period_exists(data_folder)
+        self.period_path = Path(data_folder)
         self.result_json = (self.period_path / "results.json").as_posix()
         self.target_max = None  # max per role used for each run
 
@@ -317,12 +315,12 @@ class Scheduler:
 
         attendance_file = self.period_path / "actual_attendance.json"
         members_file = self.period_path / "members.csv"
-        output_file = self.period_path / "members_updated.csv"
         logging.info(f"Applying {attendance_file} to update {members_file}")
         if has_responses:
             logging.info(f"Using responses file: {self.period_path / 'responses.csv'}")
 
-        file_io.save_peeps_csv(sequence.peeps, output_file)
+        saver = FilePeriodSaver(self.period_path.parent)
+        saver.save_members(self.period_path.name, sequence.peeps)
         logging.info("Updated members.csv ready for Google Sheets upload.")
         return sequence.peeps
 

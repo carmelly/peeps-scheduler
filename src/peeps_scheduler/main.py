@@ -2,17 +2,14 @@ import argparse
 import logging
 import os
 import sys
-from pathlib import Path
 from peeps_scheduler import constants, utils
+from peeps_scheduler.adapters.file.loader import DEFAULT_BASE_PATH
 from peeps_scheduler.adapters.file.validation import FileValidationError, load_and_validate_period
-from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.scheduler import Scheduler
 
 
 def apply_results(period_folder):
-    dm = get_data_manager()
-    period_path = Path(dm.get_period_path(period_folder))
-
+    period_path = DEFAULT_BASE_PATH / period_folder
     folder_name = period_path.name
     try:
         year = int(folder_name[:4])
@@ -107,8 +104,7 @@ def main():
 
     # Routing logic
     if args.command == "run":
-        dm = get_data_manager()
-        period_path = Path(dm.get_period_path(args.data_folder))
+        period_path = DEFAULT_BASE_PATH / args.data_folder
         folder_name = period_path.name
         try:
             year = int(folder_name[:4])
