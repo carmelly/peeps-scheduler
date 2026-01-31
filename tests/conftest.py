@@ -4,6 +4,37 @@ from peeps_scheduler.models import Event, Peep, Role, SwitchPreference
 
 
 @pytest.fixture
+def sample_peeps():
+    """Two sample peeps with all fields filled out."""
+    return [
+        Peep(
+            id=1,
+            full_name="Alice Alpha",
+            display_name="Alice",
+            email="alice@test.com",
+            role=Role.LEADER,
+            index=0,
+            priority=1,
+            total_attended=3,
+            active=True,
+            date_joined="2022-01-01",
+        ),
+        Peep(
+            id=2,
+            full_name="Bob Beta",
+            display_name="Bob",
+            email="bob@test.com",
+            role=Role.FOLLOWER,
+            index=1,
+            priority=2,
+            total_attended=5,
+            active=True,
+            date_joined="2022-01-01",
+        ),
+    ]
+
+
+@pytest.fixture
 def peep_factory():
     """Factory for creating test peeps with sensible defaults."""
 

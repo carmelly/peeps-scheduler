@@ -543,46 +543,6 @@ class EventSequence:
         self.one_sided_fulfilled = 0
         self.normalized_utilization = 0
 
-    def to_dict(self):
-        return {
-            "valid_events": [
-                {
-                    "id": event.id,
-                    "date": event.date.strftime(DATE_FORMAT),
-                    "duration_minutes": event.duration_minutes,
-                    "attendees": [
-                        {
-                            "id": peep.id,
-                            "name": peep.name,
-                            "role": (
-                                Role.LEADER.value if peep in event._leaders else Role.FOLLOWER.value
-                            ),
-                        }
-                        for peep in event.attendees
-                    ],
-                    "alternates": [
-                        {"id": peep.id, "name": peep.name, "role": Role.LEADER.value}
-                        for peep in event.alt_leaders
-                    ]
-                    + [
-                        {"id": peep.id, "name": peep.name, "role": Role.FOLLOWER.value}
-                        for peep in event.alt_followers
-                    ],
-                    "leaders_string": event.get_participants_str(Role.LEADER),
-                    "followers_string": event.get_participants_str(Role.FOLLOWER),
-                    **({"topic": event.topic} if event.topic is not None else {}),
-                }
-                for event in self.valid_events
-            ],
-            "num_unique_attendees": self.num_unique_attendees,
-            "priority_fulfilled": self.priority_fulfilled,
-            "partnerships_fulfilled": self.partnerships_fulfilled,
-            "mutual_unique_fulfilled": self.mutual_unique_fulfilled,
-            "mutual_repeat_fulfilled": self.mutual_repeat_fulfilled,
-            "one_sided_fulfilled": self.one_sided_fulfilled,
-            "system_weight": self.system_weight,
-        }
-
     def finalize(self):
         """Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
         utilization_sum = 0

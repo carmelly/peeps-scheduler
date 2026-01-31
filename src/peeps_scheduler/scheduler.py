@@ -1,8 +1,10 @@
 import copy
 import logging
 import time
+from pathlib import Path
 import peeps_scheduler.constants as constants
 from peeps_scheduler import file_io, utils
+from peeps_scheduler.adapters.file.saver import FilePeriodSaver
 from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.data_manager import get_data_manager
 from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
@@ -288,14 +290,10 @@ class Scheduler:
         self,
         sequence: EventSequence,
     ) -> None:
-        data = sequence.to_dict()
-        topic_assignments = {
-            event.id: event.topic for event in sequence.valid_events if event.topic is not None
-        }
-        if topic_assignments:
-            data["topic_assignments"] = topic_assignments
-
-        file_io.save_json(data, str(self.result_json))
+        period_path = Path(self.data_folder).parent
+        period_slug = Path(self.data_folder).name
+        saver = FilePeriodSaver(period_path)
+        saver.save_results(period_slug, sequence)
         logging.info(f"Saved event sequence to {self.result_json}")
 
     def apply_results(self):

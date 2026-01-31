@@ -9,14 +9,12 @@ from peeps_scheduler.models import EventSequence, Role
 from peeps_scheduler.scheduler import Scheduler
 
 
-def create_topic_scheduler(period_data, tmp_path):
+def create_scheduler(period_data, tmp_path):
     scheduler = Scheduler(
         period_data=period_data,
-        data_folder="test",
+        data_folder=tmp_path,
         max_events=constants.DEFAULT_MAX_EVENTS,
     )
-    scheduler.period_path = tmp_path
-    scheduler.result_json = str(tmp_path / "results.json")
     return scheduler
 
 
@@ -43,7 +41,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one, event_two], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic C"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -62,7 +60,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one, event_two], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -78,7 +76,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -95,7 +93,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic B"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -108,7 +106,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic B", "Topic A"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -127,7 +125,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic B"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -149,7 +147,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one, event_two], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic B"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -176,7 +174,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one, event_two], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic B"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -199,7 +197,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one, event_two], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A", "Topic B"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -219,7 +217,7 @@ class TestSchedulerTopicAssignment:
 
         sequence = build_sequence([event_one], peeps)
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic B", "Topic A"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
 
@@ -232,13 +230,12 @@ class TestSchedulerTopicAssignment:
         sequence = build_sequence([event_one], peeps)
 
         period_data = PeriodData(peeps=peeps, events=[], topics=["Topic A"])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._assign_topics(sequence)
         scheduler._save_sequence(sequence)
 
         updated = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
-        assert updated["topic_assignments"] == {"1": "Topic A"}
         assert updated["valid_events"][0]["topic"] == "Topic A"
 
     def test_save_sequence_skips_topics_without_configuration(
@@ -250,9 +247,9 @@ class TestSchedulerTopicAssignment:
         sequence = build_sequence([event_one], peeps)
 
         period_data = PeriodData(peeps=peeps, events=[], topics=[])
-        scheduler = create_topic_scheduler(period_data, tmp_path)
+        scheduler = create_scheduler(period_data, tmp_path)
 
         scheduler._save_sequence(sequence)
 
         updated = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
-        assert "topic_assignments" not in updated
+        assert not any("topic" in event for event in updated["valid_events"])
