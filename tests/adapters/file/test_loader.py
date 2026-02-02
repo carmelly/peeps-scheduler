@@ -16,13 +16,13 @@ from peeps_scheduler.adapters.file.loader import (
     _split_response_rows,
 )
 from peeps_scheduler.adapters.file.validation.errors import FileValidationError
-from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
     PartnershipRequest,
     Peep,
+    PeriodData,
 )
 
 

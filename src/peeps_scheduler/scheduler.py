@@ -5,8 +5,7 @@ from pathlib import Path
 import peeps_scheduler.constants as constants
 from peeps_scheduler import utils
 from peeps_scheduler.adapters.file.saver import FilePeriodSaver
-from peeps_scheduler.adapters.file.validation.period import PeriodData
-from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
+from peeps_scheduler.models import EventSequence, Peep, PeriodData, Role, SwitchPreference
 from peeps_scheduler.topic_assignment import assign_topics_to_events
 
 

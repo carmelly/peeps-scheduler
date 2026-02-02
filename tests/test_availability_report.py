@@ -1,11 +1,95 @@
 from __future__ import annotations
 
-from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.availability_report import (
-    parse_availability,
+    AvailabilityReport,
+    generate_availability_report,
     print_availability,
 )
-from peeps_scheduler.models import CancelledMemberAvailability, Role, SwitchPreference
+from peeps_scheduler.models import CancelledMemberAvailability, PeriodData, Role, SwitchPreference
+
+
+def test_parse_availability_basic(peep_factory, event_factory):
+    """Test basic parsing of availability report."""
+    event1 = event_factory(id=1)
+    event2 = event_factory(id=2)
+
+    peep1 = peep_factory(id=1, role=Role.LEADER, availability=[event1, event2])
+    peep2 = peep_factory(id=2, role=Role.FOLLOWER, availability=[event2])
+    peep3 = peep_factory(id=3, role=Role.LEADER, availability=[])
+    peep4 = peep_factory(id=4, role=Role.FOLLOWER, availability=[], responded=False)
+
+    period_data = PeriodData(
+        peeps=[peep1, peep2, peep3, peep4],
+        events=[event1, event2],
+    )
+
+    report = generate_availability_report(period_data)
+    availability, unavailable_peeps, non_responders = (
+        report.availability,
+        report.unavailable,
+        report.non_responders,
+    )
+
+    assert availability[event1]["leader"] == ["TestPeep1"]
+    assert availability[event1]["follower"] == []
+    assert availability[event2]["leader"] == ["TestPeep1"]
+    assert availability[event2]["follower"] == ["TestPeep2"]
+
+    assert unavailable_peeps == [peep3]
+    assert non_responders == [peep4]
+
+
+def test_parse_availability_removes_cancelled_events(peep_factory, event_factory):
+    """Test that cancelled events are excluded from availability report."""
+    event1 = event_factory(id=1)
+    cancelled_event = event_factory(id=2)
+
+    peep1 = peep_factory(id=1, role=Role.LEADER, availability=[event1, cancelled_event])
+    peep2 = peep_factory(id=2, role=Role.FOLLOWER, availability=[cancelled_event])
+
+    period_data = PeriodData(
+        peeps=[peep1, peep2],
+        events=[event1, cancelled_event],
+        cancelled_events=[cancelled_event],
+    )
+
+    report = generate_availability_report(period_data)
+    availability, unavailable_peeps, _non_responders = (
+        report.availability,
+        report.unavailable,
+        report.non_responders,
+    )
+
+    # Check that cancelled event is exluded from report and that peep2 now shows as unavailable
+    assert cancelled_event not in availability
+    assert unavailable_peeps == [peep2]
+
+
+def test_parse_availability_removes_cancelled_member_availability(peep_factory, event_factory):
+    """Test that cancelled member availability is excluded from availability report."""
+    event1 = event_factory(id=1)
+
+    peep1 = peep_factory(id=1, role=Role.LEADER, availability=[event1])
+
+    cancelled_availability = CancelledMemberAvailability(peep=peep1, events=[event1])
+
+    period_data = PeriodData(
+        peeps=[peep1],
+        events=[event1],
+        cancelled_member_availability=[cancelled_availability],
+    )
+
+    report = generate_availability_report(period_data)
+    availability, unavailable_peeps, _non_responders = (
+        report.availability,
+        report.unavailable,
+        report.non_responders,
+    )
+
+    # Check that event has no availability since peep1's availability was cancelled
+    assert availability[event1]["leader"] == []
+    # Check that peep1 now shows as unavailable
+    assert unavailable_peeps == [peep1]
 
 
 def test_parse_availability_counts_switch_preferences(peep_factory, event_factory):
@@ -27,7 +111,12 @@ def test_parse_availability_counts_switch_preferences(peep_factory, event_factor
 
     period_data = PeriodData(peeps=[leader, follower, unavailable, non_responder], events=[event])
 
-    availability, unavailable_peeps, non_responders = parse_availability(period_data)
+    report = generate_availability_report(period_data)
+    availability, unavailable_peeps, non_responders = (
+        report.availability,
+        report.unavailable,
+        report.non_responders,
+    )
 
     assert availability[event]["leader"] == ["TestPeep5"]
     assert availability[event]["follower"] == ["TestPeep6"]
@@ -52,11 +141,14 @@ def test_print_availability_outputs_sections(capsys, event_factory, peep_factory
     cancelled = [event]
     cancelled_availability = [CancelledMemberAvailability(peep=unavailable[0], events=[event])]
 
+    report = AvailabilityReport(
+        availability=availability,
+        unavailable=unavailable,
+        non_responders=non_responders,
+    )
     print_availability(
-        availability,
-        unavailable,
-        non_responders,
-        year=2025,
+        availability_report=report,
+        original_availability_report=None,
         cancelled_events=cancelled,
         cancelled_availability=cancelled_availability,
     )

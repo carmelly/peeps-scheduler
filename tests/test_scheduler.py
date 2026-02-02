@@ -13,8 +13,14 @@ import tempfile
 from pathlib import Path
 import pytest
 import peeps_scheduler.constants as constants
-from peeps_scheduler.adapters.file.validation.period import PeriodData, load_and_validate_period
-from peeps_scheduler.models import EventSequence, PartnershipRequest, Role, SwitchPreference
+from peeps_scheduler.adapters.file.loader import load_period_from_files
+from peeps_scheduler.models import (
+    EventSequence,
+    PartnershipRequest,
+    PeriodData,
+    Role,
+    SwitchPreference,
+)
 from peeps_scheduler.scheduler import Scheduler
 
 
@@ -278,10 +284,10 @@ def temp_files(members_csv_content, responses_csv_content, actual_attendance_dat
 
 
 def _apply_results(temp_files):
-    period_data = load_and_validate_period(
-        str(temp_files["temp_dir"]),
+    period_data = load_period_from_files(
+        temp_files["temp_dir"],
         2020,
-        allow_missing_responses=True,
+        require_responses=False,
         require_attendance=True,
     )
     scheduler = Scheduler(
@@ -300,11 +306,8 @@ class TestApplyResultsErrorHandling:
         temp_files["members"].unlink()
 
         with pytest.raises(FileNotFoundError):
-            load_and_validate_period(
-                str(temp_files["temp_dir"]),
-                2020,
-                allow_missing_responses=True,
-                require_attendance=True,
+            load_period_from_files(
+                temp_files["temp_dir"], 2020, require_responses=False, require_attendance=True
             )
 
     def test_missing_attendance_file_raises_error(self, temp_files):
@@ -312,11 +315,8 @@ class TestApplyResultsErrorHandling:
         temp_files["attendance"].unlink()
 
         with pytest.raises(FileNotFoundError):
-            load_and_validate_period(
-                str(temp_files["temp_dir"]),
-                2020,
-                allow_missing_responses=True,
-                require_attendance=True,
+            load_period_from_files(
+                temp_files["temp_dir"], 2020, require_responses=False, require_attendance=True
             )
 
     def test_missing_responses_file_handles_gracefully(self, temp_files):

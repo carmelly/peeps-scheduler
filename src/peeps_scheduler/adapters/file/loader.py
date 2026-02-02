@@ -4,9 +4,10 @@ import re
 from datetime import date
 from pathlib import Path
 from peeps_scheduler.adapters.file.mappers import map_period
-from peeps_scheduler.adapters.file.validation.period import PeriodData, validate_period_data
+from peeps_scheduler.adapters.file.validation.period import validate_period_data
 from peeps_scheduler.adapters.protocols import PeriodLoader
 from peeps_scheduler.constants import PRIVATE_DATA_ROOT
+from peeps_scheduler.models import PeriodData
 
 DEFAULT_BASE_PATH = Path(PRIVATE_DATA_ROOT) / "original"
 DEFAULT_SCHEDULER_YEAR = date.today().year
@@ -169,3 +170,20 @@ class FilePeriodLoader(PeriodLoader):
         }
 
         return period_data
+
+
+def load_period_from_files(
+    period_path: Path,
+    year: int,
+    require_responses: bool = True,
+    require_attendance: bool = False,
+) -> PeriodData:
+    """Load and validate period data from files in the given period path."""
+    loader = FilePeriodLoader(
+        base_path=period_path.parent,
+        year=year,
+        require_responses=require_responses,
+        require_attendance=require_attendance,
+    )
+    period_data = loader.load_period(period_path.name)
+    return period_data

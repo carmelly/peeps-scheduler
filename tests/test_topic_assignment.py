@@ -4,8 +4,7 @@ Tests for topic assignment behavior and results serialization.
 
 import json
 import peeps_scheduler.constants as constants
-from peeps_scheduler.adapters.file.validation.period import PeriodData
-from peeps_scheduler.models import EventSequence, Role
+from peeps_scheduler.models import EventSequence, PeriodData, Role
 from peeps_scheduler.scheduler import Scheduler
 
 

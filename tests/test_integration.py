@@ -13,7 +13,8 @@ import shutil
 import tempfile
 from pathlib import Path
 import pytest
-from peeps_scheduler.adapters.file.validation import FileValidationError, load_and_validate_period
+from peeps_scheduler.adapters.file.loader import load_period_from_files
+from peeps_scheduler.adapters.file.validation import FileValidationError
 from peeps_scheduler.scheduler import Scheduler
 
 
@@ -38,7 +39,7 @@ class TestEndToEndWorkflows:
             (period_path / "members.csv").write_text(members_csv_content)
             (period_path / "responses.csv").write_text(responses_csv_content)
 
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -80,7 +81,7 @@ class TestEndToEndWorkflows:
             (period_path / "responses.csv").write_text(responses_csv_content)
 
             # Run complete scheduler workflow
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -133,7 +134,7 @@ class TestEndToEndWorkflows:
             shutil.copy(golden_master_dir / "responses.csv", responses_csv)
             shutil.copy(golden_master_dir / "members.csv", members_csv)
 
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -233,7 +234,7 @@ class TestCancellationsWorkflow:
             with pytest.raises(
                 FileValidationError, match=r"cancelled event.*not found|unknown.*cancelled"
             ):
-                load_and_validate_period(str(period_path), 2025)
+                load_period_from_files(period_path, 2025)
 
     def test_scheduler_skips_cancelled_events(self):
         """Test that cancelled events are filtered from results.
@@ -293,7 +294,7 @@ class TestCancellationsWorkflow:
             with period_config_path.open("w") as f:
                 json.dump(period_config_content, f)
 
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -368,7 +369,7 @@ class TestCancellationsWorkflow:
 
             # DO NOT create period_config.json
 
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -445,7 +446,7 @@ class TestCancellationsWorkflow:
             with period_config_path.open("w") as f:
                 json.dump(period_config_content, f)
 
-            period_data = load_and_validate_period(str(period_path), 2025)
+            period_data = load_period_from_files(period_path, 2025)
             scheduler = Scheduler(
                 period_data=period_data,
                 data_folder=str(period_path),
@@ -497,4 +498,4 @@ class TestCancellationsWorkflow:
                 json.dump(period_config_content, f)
 
             with pytest.raises(FileValidationError, match=r"unknown email|cancelled availability"):
-                load_and_validate_period(str(period_path), 2025)
+                load_period_from_files(period_path, 2025)

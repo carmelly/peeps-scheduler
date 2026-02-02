@@ -128,15 +128,6 @@ def temp_period_dir(ctx):
 class TestPeriodSchemaIntegration:
     """Integration tests for complete PeriodFileSchema workflow."""
 
-    def test_load_and_validate_period_returns_period_data(self, ctx, temp_period_dir):
-        """Integration: load_and_validate_period() uses PeriodFileSchema.model_validate()."""
-        period_data = load_and_validate_period(str(temp_period_dir), 2020)
-
-        # TODO: need better asserts
-        assert isinstance(period_data, PeriodData)
-        assert len(period_data.peeps) >= 1
-        assert len(period_data.events) >= 1
-
     def test_period_file_schema_validates_all_cross_file_constraints(self, ctx, temp_period_dir):
         """Integration: PeriodFileSchema enforces all cross-file validation rules."""
         # This test verifies the complete validation works end-to-end

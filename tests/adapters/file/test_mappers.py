@@ -43,13 +43,13 @@ from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import 
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.results_json import ResultsJsonSchema
 from peeps_scheduler.adapters.file.validation.parsers import EventSpec
-from peeps_scheduler.adapters.file.validation.period import PeriodData
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
     PartnershipRequest,
     Peep,
+    PeriodData,
     Role,
     SwitchPreference,
 )

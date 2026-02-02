@@ -1,6 +1,5 @@
 from typing import Protocol
-from peeps_scheduler.adapters.file.validation import PeriodData
-from peeps_scheduler.models import EventSequence, Peep
+from peeps_scheduler.models import EventSequence, Peep, PeriodData
 
 
 class PeriodLoader(Protocol):
