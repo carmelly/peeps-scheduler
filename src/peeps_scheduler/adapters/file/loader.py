@@ -3,10 +3,13 @@ import json
 import re
 from datetime import date
 from pathlib import Path
+from pydantic import ValidationError
 from peeps_scheduler.adapters.file.mappers import map_period
-from peeps_scheduler.adapters.file.validation.period import validate_period_data
+from peeps_scheduler.adapters.file.validation.errors import FileValidationError
+from peeps_scheduler.adapters.file.validation.fields import ValidationContext
+from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
 from peeps_scheduler.adapters.protocols import PeriodLoader
-from peeps_scheduler.constants import PRIVATE_DATA_ROOT
+from peeps_scheduler.constants import DEFAULT_TIMEZONE, PRIVATE_DATA_ROOT
 from peeps_scheduler.models import PeriodData
 
 DEFAULT_BASE_PATH = Path(PRIVATE_DATA_ROOT) / "original"
@@ -107,6 +110,25 @@ class FilePeriodLoader(PeriodLoader):
 
         return sorted(periods)
 
+    def _validate_period_data(self, raw_data: dict) -> PeriodFileSchema:
+        """Validate raw period data and return validated schema.
+
+        Args:
+            raw_data: Raw period data as dict
+
+        Returns:
+            Validated PeriodFileSchema
+
+        Raises:
+            FileValidationError: If validation fails
+        """
+        ctx = ValidationContext(year=self.year, tz=DEFAULT_TIMEZONE)
+        try:
+            period_schema = PeriodFileSchema.model_validate(raw_data, context={"ctx": ctx})
+        except ValidationError as exc:
+            raise FileValidationError(FileValidationError._infer_filename(exc), exc) from exc
+        return period_schema
+
     def load_period(self, period_slug: str) -> PeriodData:
         period_path = self.base_path / period_slug
 
@@ -118,7 +140,7 @@ class FilePeriodLoader(PeriodLoader):
         )
 
         # Validate and convert to PeriodData
-        period_schema = validate_period_data(raw_data, self.year)
+        period_schema = self._validate_period_data(raw_data)
         period_data = map_period(period_schema)
         return period_data
 
