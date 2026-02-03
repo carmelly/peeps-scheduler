@@ -11,6 +11,42 @@ Example:
 """
 
 
+def period_data(overrides: dict | None = None) -> dict:
+    """Factory for valid period data input.
+
+    Creates minimal period data with members and responses.
+    """
+    defaults = {
+        "members.csv": [
+            member_data(
+                {
+                    "id": "1",
+                    "Index": "0",
+                    "Name": "Alice Alpha",
+                    "Display Name": "Alice",
+                    "Email Address": "alice@test.com",
+                }
+            ),
+            member_data(
+                {
+                    "id": "2",
+                    "Index": "1",
+                    "Name": "Bob Beta",
+                    "Display Name": "Bob",
+                    "Email Address": "bob@test.com",
+                }
+            ),
+        ],
+        "responses.csv": {
+            "responses": [
+                response_data({"Name": "Alice Alpha", "Email Address": "alice@test.com"}),
+                response_data({"Name": "Bob Beta", "Email Address": "bob@test.com"}),
+            ],
+        },
+    }
+    return {**defaults, **(overrides or {})}
+
+
 def member_data(overrides: dict | None = None) -> dict:
     """Factory for valid MemberCsvRowSchema test data.
 
@@ -117,4 +153,3 @@ def results_data(overrides: dict | None = None) -> dict:
         "system_weight": 10,
     }
     return {**defaults, **(overrides or {})}
-

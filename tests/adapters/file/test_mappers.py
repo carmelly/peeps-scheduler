@@ -2,12 +2,12 @@
 
 import datetime
 import pytest
-from tests.adapters.file.validation.file_schemas.test_period import period_data
 from tests.adapters.file.validation.fixtures import (
     attendance_data,
     attendance_event_data,
     event_row_data,
     member_data,
+    period_data,
     response_data,
     result_event_data,
     results_data,
@@ -24,6 +24,7 @@ from peeps_scheduler.adapters.file.mappers import (
     map_period,
     map_results_events,
 )
+from peeps_scheduler.adapters.file.validation import validate_period
 from peeps_scheduler.adapters.file.validation.fields import ValidationContext
 from peeps_scheduler.adapters.file.validation.file_schemas.attendance_json import (
     ActualAttendanceJsonSchema,
@@ -32,10 +33,9 @@ from peeps_scheduler.adapters.file.validation.file_schemas.members_csv import (
     MemberCsvRowSchema,
     MembersCsvFileSchema,
 )
-from peeps_scheduler.adapters.file.validation.file_schemas.period import (
+from peeps_scheduler.adapters.file.validation.file_schemas.period_config import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
-    PeriodFileSchema,
 )
 from peeps_scheduler.adapters.file.validation.file_schemas.responses_csv import (
     ResponseCsvRowSchema,
@@ -602,16 +602,17 @@ class TestMapPeriod:
 
     def test_converts_event_specs_to_events(self, ctx):
         """Contract: map_period() converts EventSpec to Event domain objects."""
-        schema = PeriodFileSchema.model_validate(
+        schema = validate_period(
             period_data(
                 {
-                    "responses": {
+                    "responses.csv": {
                         "responses": [response_data()],
                         "event_rows": [event_row_data()],
                     }
                 }
             ),
-            context={"ctx": ctx},
+            ctx.year,
+            ctx.tz,
         )
 
         result = map_period(schema)
@@ -623,13 +624,13 @@ class TestMapPeriod:
 
     def test_accepts_period_file_schema(self, ctx):
         """Contract: map_period() accepts PeriodFileSchema object and returns PeriodData."""
-        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+        schema = validate_period(period_data(), ctx.year, ctx.tz)
         result = map_period(schema)
         assert isinstance(result, PeriodData)
 
     def test_populates_peeps_from_schema(self, ctx):
         """Contract: Peeps populated correctly from schema members and responses."""
-        schema = PeriodFileSchema.model_validate(period_data(), context={"ctx": ctx})
+        schema = validate_period(period_data(), ctx.year, ctx.tz)
 
         result = map_period(schema)
 
@@ -640,10 +641,10 @@ class TestMapPeriod:
 
     def test_populates_events_from_schema_responses_events(self, ctx):
         """Contract: Events created from schema.responses.events (EventSpecs)."""
-        schema = PeriodFileSchema.model_validate(
+        schema = validate_period(
             period_data(
                 {
-                    "responses": {
+                    "responses.csv": {
                         "responses": [response_data()],
                         "event_rows": [
                             event_row_data(
@@ -653,7 +654,8 @@ class TestMapPeriod:
                     }
                 }
             ),
-            context={"ctx": ctx},
+            ctx.year,
+            ctx.tz,
         )
 
         result = map_period(schema)
@@ -667,10 +669,10 @@ class TestMapPeriod:
 
     def test_extracts_cancellations_from_schema(self, ctx):
         """Contract: Cancellations extracted correctly from schema."""
-        schema = PeriodFileSchema.model_validate(
+        schema = validate_period(
             period_data(
                 {
-                    "responses": {
+                    "responses.csv": {
                         "responses": [response_data()],
                         "event_rows": [
                             event_row_data(
@@ -678,10 +680,11 @@ class TestMapPeriod:
                             )
                         ],
                     },
-                    "cancelled_events": ["Saturday January 4 - 1pm"],
+                    "period_config.json": {"cancelled_events": ["Saturday January 4 - 1pm"]},
                 }
             ),
-            context={"ctx": ctx},
+            ctx.year,
+            ctx.tz,
         )
 
         result = map_period(schema)

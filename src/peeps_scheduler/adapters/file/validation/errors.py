@@ -1,111 +1,119 @@
 """Validation error handling and wrapping."""
 
+from dataclasses import dataclass
+from typing import Literal
 from pydantic import ValidationError
 
 MAX_ERRORS_DISPLAYED = 10
 
 
-class FileValidationError(Exception):
-    """Wraps Pydantic ValidationError with file context.
+@dataclass
+class ValidationFailure:
+    """Represents a single validation failure (file-level or cross-file).
 
-    Automatically infers the filename from the validation error location.
+    Attributes:
+        failure_type: Whether this is a file-level or cross-file validation failure
+        filenames: List of involved filenames (one for file-level, multiple for cross-file)
+        message: Human-readable error message
+        pydantic_error: Original Pydantic ValidationError (for file-level failures only)
     """
 
-    def __init__(self, filename: str, validation_error: ValidationError):
-        self.validation_error = validation_error
-        self.filename = filename
+    failure_type: Literal["file", "cross-file"]
+    filenames: list[str]
+    message: str
+    pydantic_error: ValidationError | None = None
 
     @staticmethod
-    def _infer_filename(error: ValidationError) -> str:
-        """Infer which file caused a validation error based on error location.
+    def from_file_error(filename: str, validation_error: ValidationError) -> "ValidationFailure":
+        """Create a file-level ValidationFailure from a Pydantic ValidationError."""
+        return ValidationFailure(
+            failure_type="file",
+            filenames=[filename],
+            message=_format_file_error(filename, validation_error),
+            pydantic_error=validation_error,
+        )
 
-        Args:
-            error: Pydantic ValidationError
-
-        Returns:
-            Filename string (members.csv, responses.csv, or period_config.json)
-        """
-        fields = set()
-        for err in error.errors():
-            loc = err.get("loc") or ()
-            fields.add(loc[0] if loc else None)
-        if len(fields) == 1:
-            field = next(iter(fields))
-            if field == "members":
-                return "members.csv"
-            if field == "responses":
-                return "responses.csv"
-            if field in {
-                "cancelled_events",
-                "cancelled_member_availability",
-                "partnership_requests",
-                "topics",
-            }:
-                return "period_config.json"
-        return "unknown"
+    @staticmethod
+    def from_cross_file_error(filenames: list[str], message: str) -> "ValidationFailure":
+        """Create a cross-file ValidationFailure from an error message."""
+        formatted_message = f"Cross-file validation error ({', '.join(filenames)}): {message}"
+        return ValidationFailure(
+            failure_type="cross-file",
+            filenames=filenames,
+            message=formatted_message,
+            pydantic_error=None,
+        )
 
     def errors(self) -> list[dict]:
-        """Return structured access to errors in Pydantic format."""
-        return self.validation_error.errors()
+        """Return structured errors in Pydantic format (for file-level failures only)."""
+        if self.pydantic_error:
+            return self.pydantic_error.errors()
+        return []
 
-    def __str__(self) -> str:
-        """Return human-readable format with file context."""
-        lines = [f"Validation failed in {self.filename}:"]
 
-        # Get all errors
-        all_errors = self.errors()
+class PeriodValidationError(Exception):
+    """Collection of validation failures from validating a period.
 
-        # Show first MAX_ERRORS_DISPLAYED errors
-        for error in all_errors[:MAX_ERRORS_DISPLAYED]:
-            # Extract field name and message
-            loc = error.get("loc", ())
-            msg = error.get("msg", "")
+    Can contain both file-level and cross-file validation failures.
+    """
 
-            # Check if it's a row error (first element in loc is a row number)
-            if loc and isinstance(loc[0], int):
-                row = loc[0]
-                # Get field name (might be nested)
-                field = loc[1] if len(loc) > 1 else "unknown"
-                lines.append(f"  Row {row}, field '{field}': {msg}")
-            else:
-                # File-level error
-                lines.append(f"  File-level: {msg}")
+    def __init__(self, failures: list[ValidationFailure]):
+        self.failures = failures
+        super().__init__(self._format_message())
 
-        # Add truncation message if needed
-        if len(all_errors) > MAX_ERRORS_DISPLAYED:
-            remaining = len(all_errors) - MAX_ERRORS_DISPLAYED
-            lines.append(f"  ... and {remaining} more error(s)")
+    def _format_message(self) -> str:
+        """Format all failures into a human-readable message."""
+        if not self.failures:
+            return "Validation failed"
 
+        if len(self.failures) == 1:
+            return self.failures[0].message
+
+        lines = [f"Validation failed with {len(self.failures)} error(s):"]
+        for failure in self.failures:
+            lines.append(f"  - {failure.message}")
         return "\n".join(lines)
-
-
-class MultiFileValidationError(Exception):
-    """Aggregates validation errors from multiple files."""
-
-    def __init__(self, file_errors: list[FileValidationError]):
-        self.file_errors = file_errors
 
     def all_errors(self) -> list[dict]:
-        """Return all errors with 'file' key added to each error dict."""
+        """Return all errors with 'file' key added (for file-level failures)."""
         result = []
-        for file_error in self.file_errors:
-            for error_dict in file_error.errors():
-                # Add 'file' key to each error dict
-                error_with_file = {**error_dict, "file": file_error.filename}
-                result.append(error_with_file)
+        for failure in self.failures:
+            if failure.pydantic_error:
+                for error_dict in failure.errors():
+                    error_with_file = {**error_dict, "file": failure.filenames[0]}
+                    result.append(error_with_file)
         return result
 
-    def __str__(self) -> str:
-        """Return human-readable format with all file errors combined."""
-        num_files = len(self.file_errors)
-        lines = [f"Validation errors in {num_files} files:"]
+    def has_file_errors(self) -> bool:
+        """Check if any failures are file-level errors."""
+        return any(f.failure_type == "file" for f in self.failures)
 
-        # Add each file's errors
-        for file_error in self.file_errors:
-            file_error_str = str(file_error)
-            # Append the file error block
-            lines.append(file_error_str)
+    def has_cross_file_errors(self) -> bool:
+        """Check if any failures are cross-file errors."""
+        return any(f.failure_type == "cross-file" for f in self.failures)
 
-        return "\n".join(lines)
 
-        return "\n".join(lines)
+def _format_file_error(filename: str, validation_error: ValidationError) -> str:
+    """Format a file-level validation error."""
+    lines = [f"Validation failed in {filename}:"]
+    all_errors = validation_error.errors()
+
+    # Show first MAX_ERRORS_DISPLAYED errors
+    for error in all_errors[:MAX_ERRORS_DISPLAYED]:
+        loc = error.get("loc", ())
+        msg = error.get("msg", "")
+
+        # Check if it's a row error (first element in loc is a row number)
+        if loc and isinstance(loc[0], int):
+            row = loc[0]
+            field = loc[1] if len(loc) > 1 else "unknown"
+            lines.append(f"  Row {row}, field '{field}': {msg}")
+        else:
+            lines.append(f"  File-level: {msg}")
+
+    # Add truncation message if needed
+    if len(all_errors) > MAX_ERRORS_DISPLAYED:
+        remaining = len(all_errors) - MAX_ERRORS_DISPLAYED
+        lines.append(f"  ... and {remaining} more error(s)")
+
+    return "\n".join(lines)

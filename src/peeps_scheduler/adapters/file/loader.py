@@ -3,11 +3,8 @@ import json
 import re
 from datetime import date
 from pathlib import Path
-from pydantic import ValidationError
 from peeps_scheduler.adapters.file.mappers import map_period
-from peeps_scheduler.adapters.file.validation.errors import FileValidationError
-from peeps_scheduler.adapters.file.validation.fields import ValidationContext
-from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
+from peeps_scheduler.adapters.file.validation.period import validate_period
 from peeps_scheduler.adapters.protocols import PeriodLoader
 from peeps_scheduler.constants import DEFAULT_TIMEZONE, PRIVATE_DATA_ROOT
 from peeps_scheduler.models import PeriodData
@@ -110,24 +107,19 @@ class FilePeriodLoader(PeriodLoader):
 
         return sorted(periods)
 
-    def _validate_period_data(self, raw_data: dict) -> PeriodFileSchema:
+    def _validate_period_data(self, raw_data: dict) -> dict[str, dict]:
         """Validate raw period data and return validated schema.
 
         Args:
             raw_data: Raw period data as dict
 
         Returns:
-            Validated PeriodFileSchema
+            dict of validated schemas by filename
 
         Raises:
-            FileValidationError: If validation fails
+            PeriodValidationError: If validation fails
         """
-        ctx = ValidationContext(year=self.year, tz=DEFAULT_TIMEZONE)
-        try:
-            period_schema = PeriodFileSchema.model_validate(raw_data, context={"ctx": ctx})
-        except ValidationError as exc:
-            raise FileValidationError(FileValidationError._infer_filename(exc), exc) from exc
-        return period_schema
+        return validate_period(raw_data, year=self.year, tz=DEFAULT_TIMEZONE)
 
     def load_period(self, period_slug: str) -> PeriodData:
         period_path = self.base_path / period_slug
@@ -176,19 +168,21 @@ class FilePeriodLoader(PeriodLoader):
         )
 
         period_data = {
-            "members": member_rows,
-            "responses": {
+            "members.csv": member_rows,
+            "responses.csv": {
                 "responses": response_data_rows,
                 "event_rows": event_rows or None,
             },
-            "cancelled_events": period_config_data.get("cancelled_events", []),
-            "cancelled_member_availability": period_config_data.get(
-                "cancelled_member_availability", []
-            ),
-            "partnership_requests": period_config_data.get("partnership_requests", []),
-            "topics": period_config_data.get("topics", []),
-            "results": results_data or None,
-            "attendance": attendance_data or None,
+            "results.json": results_data or None,
+            "actual_attendance.json": attendance_data or None,
+            "period_config.json": {
+                "cancelled_events": period_config_data.get("cancelled_events", []),
+                "cancelled_member_availability": period_config_data.get(
+                    "cancelled_member_availability", []
+                ),
+                "partnership_requests": period_config_data.get("partnership_requests", []),
+                "topics": period_config_data.get("topics", []),
+            },
         }
 
         return period_data

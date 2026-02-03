@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 import pytest
 from peeps_scheduler.adapters.file.loader import load_period_from_files
-from peeps_scheduler.adapters.file.validation import FileValidationError
+from peeps_scheduler.adapters.file.validation import PeriodValidationError
 from peeps_scheduler.scheduler import Scheduler
 
 
@@ -183,7 +183,7 @@ class TestCancellationsWorkflow:
         - Create 2 events: "Saturday March 1 - 5pm" and "Sunday March 2 - 5pm"
         - Create period_config.json cancelling non-existent: "Friday March 7 - 5pm"
         - Validate period
-        - Assert: Raises FileValidationError about cancelled event not found
+        - Assert: Raises PeriodValidationError about cancelled event not found
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             period_path = Path(temp_dir) / "test_period"
@@ -232,7 +232,7 @@ class TestCancellationsWorkflow:
                 json.dump(period_config_content, f)
 
             with pytest.raises(
-                FileValidationError, match=r"cancelled event.*not found|unknown.*cancelled"
+                PeriodValidationError, match=r"cancelled event.*not found|unknown.*cancelled"
             ):
                 load_period_from_files(period_path, 2025)
 
@@ -497,5 +497,7 @@ class TestCancellationsWorkflow:
             with period_config_path.open("w") as f:
                 json.dump(period_config_content, f)
 
-            with pytest.raises(FileValidationError, match=r"unknown email|cancelled availability"):
+            with pytest.raises(
+                PeriodValidationError, match=r"unknown email|cancelled availability"
+            ):
                 load_period_from_files(period_path, 2025)

@@ -8,7 +8,7 @@ from peeps_scheduler.adapters.file.loader import (
     DEFAULT_BASE_PATH,
     load_period_from_files,
 )
-from peeps_scheduler.adapters.file.validation import FileValidationError
+from peeps_scheduler.adapters.file.validation import PeriodValidationError
 from peeps_scheduler.availability_report import run_availability_report
 from peeps_scheduler.models import PeriodData
 from peeps_scheduler.scheduler import Scheduler
@@ -34,7 +34,7 @@ def _load_period_data_from_files(
             require_responses=require_responses,
             require_attendance=require_attendance,
         )
-    except (FileValidationError, FileNotFoundError) as exc:
+    except (PeriodValidationError, FileNotFoundError) as exc:
         logging.error(str(exc))
         sys.exit(1)
 

@@ -15,7 +15,7 @@ from peeps_scheduler.adapters.file.loader import (
     _normalize_text,
     _split_response_rows,
 )
-from peeps_scheduler.adapters.file.validation.errors import FileValidationError
+from peeps_scheduler.adapters.file.validation import PeriodValidationError
 from peeps_scheduler.constants import DEFAULT_TIMEZONE
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
@@ -65,23 +65,21 @@ def _write_responses_csv(base_path: Path, responses: list[dict[str, str]]) -> No
     _write_csv(base_path / "responses.csv", fieldnames, responses)
 
 
-def _get_loader(period_dir, require_responses=True, require_attendance=False):
-    period_root = period_dir.parent
-    return FilePeriodLoader(
-        base_path=period_root,
+def _load_period(
+    period_dir: Path, require_responses: bool = True, require_attendance: bool = False
+):
+    period_slug = period_dir.name
+    base_path = period_dir.parent
+    loader = FilePeriodLoader(
+        base_path=base_path,
         year=2020,
         require_responses=require_responses,
         require_attendance=require_attendance,
     )
-
-
-def _load_period(period_dir, require_responses=True, require_attendance=False):
-    period_slug = period_dir.name
-    loader = _get_loader(period_dir, require_responses, require_attendance)
     return loader.load_period(period_slug)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 class TestPeriodLoading:
     def test_load_period_returns_period_data(self, period_dir):
         period_data = _load_period(period_dir)
@@ -198,8 +196,8 @@ class TestPeriodLoading:
         }
         (period_dir / "results.json").write_text(json.dumps(results_payload))
 
-        # Should raise FileValidationError because results cannot be validated without responses
-        with pytest.raises(FileValidationError):
+        # Should raise PeriodValidationError because results cannot be validated without responses
+        with pytest.raises(PeriodValidationError):
             _load_period(period_dir, require_responses=False)
 
     def test_load_period_requires_attendance_when_flag_true(self, period_dir):
@@ -243,10 +241,8 @@ class TestPeriodLoading:
         members = [member_data({"Email Address": ""})]
         _write_members_csv(period_dir, members)
 
-        with pytest.raises(FileValidationError) as exc_info:
+        with pytest.raises(PeriodValidationError, match=r"members.csv"):
             _load_period(period_dir)
-
-        assert exc_info.value.filename == "members.csv"
 
     def test_load_period_handles_missing_period_config_file(self, period_dir):
         # Remove period_config.json

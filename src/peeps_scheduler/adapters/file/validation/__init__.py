@@ -7,19 +7,16 @@ a complete scheduling period from already-loaded file data.
 It validates in-memory structures only; file IO happens elsewhere.
 
 Public API:
-  - FileValidationError (single-file validation errors with auto-inferred filenames)
-  - MultiFileValidationError (cross-file validation errors)
-
-Validation logic is orchestrated in FilePeriodLoader.load_period().
-
+  - validate_period (main entry point for period validation)
+  - ValidationFailure (file-level and cross-file validation errors)
+  - PeriodValidationError (collection of validation failures for a period)
 """
 
-from .errors import (
-    FileValidationError,
-    MultiFileValidationError,
-)
+from .errors import PeriodValidationError, ValidationFailure
+from .period import validate_period
 
 __all__ = [
-    "FileValidationError",
-    "MultiFileValidationError",
+    "PeriodValidationError",
+    "ValidationFailure",
+    "validate_period",
 ]

@@ -1,6 +1,5 @@
 """Factory functions and validation wrappers for schema-to-domain conversion."""
 
-from peeps_scheduler.adapters.file.validation.file_schemas.period import PeriodFileSchema
 from peeps_scheduler.models import (
     CancelledMemberAvailability,
     Event,
@@ -10,7 +9,7 @@ from peeps_scheduler.models import (
 )
 from .validation.file_schemas.attendance_json import ActualAttendanceJsonSchema
 from .validation.file_schemas.members_csv import MemberCsvRowSchema
-from .validation.file_schemas.period import (
+from .validation.file_schemas.period_config import (
     CancelledAvailabilityJsonSchema,
     PartnershipRequestJsonSchema,
 )
@@ -277,27 +276,31 @@ def map_results_events(results: ResultsJsonSchema | None, peeps: list[Peep]) -> 
     return events
 
 
-def map_period(period_schema: PeriodFileSchema) -> PeriodData:
-    """
-    Convert PeriodFileSchema to PeriodData domain object.
+def map_period(validated_data: dict) -> PeriodData:
+    """Convert validated period data to PeriodData domain object.
 
     Args:
-        period_schema: Validated PeriodFileSchema object
-        year: Year for context
+        validated_data: Dict with validated schemas from PeriodValidator
+                       Keys: members, responses, results, attendance, config
 
     Returns:
         PeriodData with all components assembled
     """
-    preserve_order = bool(period_schema.responses.event_rows)
-    events = map_events(period_schema.responses.events, preserve_order)
-    peeps = map_peeps(period_schema.members.root, period_schema.responses, events)
-    results_events = map_results_events(period_schema.results, peeps)
-    attendance_events = map_attendance_events(period_schema.attendance, peeps)
-    cancelled_events = map_cancelled_events(period_schema.cancelled_events, events)
+    members_schema = validated_data["members.csv"]
+    responses_schema = validated_data["responses.csv"]
+    results_schema = validated_data.get("results.json")
+    attendance_schema = validated_data.get("actual_attendance.json")
+    config_schema = validated_data["period_config.json"]
+    preserve_order = bool(responses_schema.event_rows)
+    events = map_events(responses_schema.events, preserve_order)
+    peeps = map_peeps(members_schema.root, responses_schema, events)
+    results_events = map_results_events(results_schema, peeps)
+    attendance_events = map_attendance_events(attendance_schema, peeps)
+    cancelled_events = map_cancelled_events(config_schema.cancelled_events, events)
     cancelled_availability = map_cancelled_availability(
-        period_schema.cancelled_member_availability, peeps, events
+        config_schema.cancelled_member_availability, peeps, events
     )
-    partnership_requests = map_partnerships(period_schema.partnership_requests, peeps)
+    partnership_requests = map_partnerships(config_schema.partnership_requests, peeps)
 
     return PeriodData(
         peeps=peeps,
@@ -307,5 +310,5 @@ def map_period(period_schema: PeriodFileSchema) -> PeriodData:
         cancelled_events=cancelled_events,
         cancelled_member_availability=cancelled_availability,
         partnership_requests=partnership_requests,
-        topics=period_schema.topics,
+        topics=config_schema.topics,
     )
