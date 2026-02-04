@@ -287,6 +287,10 @@ def _validate_cross_file(
         raise PeriodValidationError(failures)
 
 
+# TODO: make helper functions private? (_validate_...)
+# TODO: Collect ValidationFailures in these helpers instead of raising ValueError?
+
+
 def validate_response_members(
     member_rows: list[MemberCsvRowSchema],
     responses: list[ResponseCsvRowSchema],

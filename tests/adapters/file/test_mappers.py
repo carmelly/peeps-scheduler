@@ -598,11 +598,11 @@ class TestMapResultsEvents:
 
 @pytest.mark.unit
 class TestMapPeriod:
-    """Tests for map_period() function with PeriodFileSchema."""
+    """Tests for map_period() function with validated period data."""
 
     def test_converts_event_specs_to_events(self, ctx):
         """Contract: map_period() converts EventSpec to Event domain objects."""
-        schema = validate_period(
+        validated_data = validate_period(
             period_data(
                 {
                     "responses.csv": {
@@ -615,7 +615,7 @@ class TestMapPeriod:
             ctx.tz,
         )
 
-        result = map_period(schema)
+        result = map_period(validated_data)
 
         assert len(result.events) == 1
         assert isinstance(result.events[0], Event)
@@ -630,9 +630,9 @@ class TestMapPeriod:
 
     def test_populates_peeps_from_schema(self, ctx):
         """Contract: Peeps populated correctly from schema members and responses."""
-        schema = validate_period(period_data(), ctx.year, ctx.tz)
+        validated_data = validate_period(period_data(), ctx.year, ctx.tz)
 
-        result = map_period(schema)
+        result = map_period(validated_data)
 
         assert len(result.peeps) >= 2
         assert all(isinstance(p, Peep) for p in result.peeps)
@@ -641,7 +641,7 @@ class TestMapPeriod:
 
     def test_populates_events_from_schema_responses_events(self, ctx):
         """Contract: Events created from schema.responses.events (EventSpecs)."""
-        schema = validate_period(
+        validated_data = validate_period(
             period_data(
                 {
                     "responses.csv": {
@@ -658,7 +658,7 @@ class TestMapPeriod:
             ctx.tz,
         )
 
-        result = map_period(schema)
+        result = map_period(validated_data)
 
         assert len(result.events) >= 1
         assert all(isinstance(e, Event) for e in result.events)
@@ -669,7 +669,7 @@ class TestMapPeriod:
 
     def test_extracts_cancellations_from_schema(self, ctx):
         """Contract: Cancellations extracted correctly from schema."""
-        schema = validate_period(
+        validated_data = validate_period(
             period_data(
                 {
                     "responses.csv": {
@@ -687,7 +687,7 @@ class TestMapPeriod:
             ctx.tz,
         )
 
-        result = map_period(schema)
+        result = map_period(validated_data)
 
         assert isinstance(result.cancelled_events, list)
         assert len(result.cancelled_events) == 1

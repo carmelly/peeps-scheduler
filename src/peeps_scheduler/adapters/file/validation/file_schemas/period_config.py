@@ -1,6 +1,8 @@
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
-from peeps_scheduler.adapters.file.validation.fields import EmailAddressStr, EventSpecList
-from peeps_scheduler.adapters.file.validation.helpers import normalize_topic
+"""Schemas for period configuration (JSON files)."""
+
+from pydantic import BaseModel, ConfigDict, field_validator
+from ..fields import EmailAddressStr, EventSpecList
+from ..helpers import normalize_topic
 
 
 class CancelledAvailabilityJsonSchema(BaseModel):
@@ -11,19 +13,13 @@ class CancelledAvailabilityJsonSchema(BaseModel):
     member_email: EmailAddressStr
     events: EventSpecList
 
-    @model_validator(mode="before")
+    @field_validator("events", mode="after")
     @classmethod
-    def check_required_fields(cls, data):
-        """Check that required fields are present."""
-        if not isinstance(data, dict):
-            return data
-
-        if "member_email" not in data:
-            raise ValueError("member_email is required")
-        if "events" not in data:
-            raise ValueError("events is required")
-
-        return data
+    def validate_non_empty_events(cls, v):
+        """Ensure events is a non-empty list."""
+        if not v:
+            raise ValueError("events cannot be empty")
+        return v
 
 
 class PartnershipRequestJsonSchema(BaseModel):
@@ -40,6 +36,14 @@ class PartnershipRequestJsonSchema(BaseModel):
         """Ensure requester_email is NOT in target_emails."""
         if info.data.get("requester_email") in v:
             raise ValueError("requester cannot be in target_emails")
+        return v
+
+    @field_validator("target_emails", mode="after")
+    @classmethod
+    def validate_non_empty_target_emails(cls, v):
+        """Ensure target_emails is a non-empty list."""
+        if not v:
+            raise ValueError("target_emails cannot be empty")
         return v
 
 
