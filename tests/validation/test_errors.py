@@ -202,6 +202,40 @@ class TestFileValidationErrorUseCases:
         assert "Row 7, field 'role':" in result
         assert "Validation failed in members.csv:" in result
 
+    def test_row_based_error_with_nested_container_loc(self):
+        """Test formatting when the row index is nested under wrapper keys,
+        e.g. ResponsesCsvFileSchema.responses[i].field -> loc ('responses', 'responses', i, field)."""
+        mock_ve = Mock(spec=ValidationError)
+        mock_ve.errors.return_value = [
+            {
+                'loc': ('responses', 'responses', 5, 'Min Interval Days'),
+                'msg': 'Field required',
+                'type': 'missing',
+            },
+        ]
+
+        error = FileValidationError("responses.csv", mock_ve)
+        result = str(error)
+
+        assert "Row 5, field 'Min Interval Days': Field required" in result
+
+    def test_genuine_file_level_error_includes_loc_path(self):
+        """Test that a true file-level error (no row index anywhere in loc) still
+        reports which top-level field it came from, instead of a bare message."""
+        mock_ve = Mock(spec=ValidationError)
+        mock_ve.errors.return_value = [
+            {
+                'loc': ('responses',),
+                'msg': 'Field required',
+                'type': 'missing',
+            },
+        ]
+
+        error = FileValidationError("period_config.json", mock_ve)
+        result = str(error)
+
+        assert "File-level (responses): Field required" in result
+
 
 @pytest.mark.unit
 class TestMultiFileValidationError:

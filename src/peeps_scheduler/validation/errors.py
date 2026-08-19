@@ -29,15 +29,21 @@ class FileValidationError(Exception):
             loc = error.get("loc", ())
             msg = error.get("msg", "")
 
-            # Check if it's a row error (first element in loc is a row number)
-            if loc and isinstance(loc[0], int):
-                row = loc[0]
-                # Get field name (might be nested)
-                field = loc[1] if len(loc) > 1 else "unknown"
+            # Pydantic's loc is the attribute/index path from the root schema to
+            # the failing field. The row index is the first int in that path, not
+            # necessarily loc[0] or loc[1] - nested wrapper models can add extra
+            # non-int segments first (e.g. ("responses", "responses", 5, "Min
+            # Interval Days") for a row nested two attributes deep).
+            row_index = next((i for i, part in enumerate(loc) if isinstance(part, int)), None)
+            if row_index is not None:
+                row = loc[row_index]
+                field_parts = loc[row_index + 1 :]
+                field = ".".join(str(part) for part in field_parts) if field_parts else "unknown"
                 lines.append(f"  Row {row}, field '{field}': {msg}")
             else:
-                # File-level error
-                lines.append(f"  File-level: {msg}")
+                # Genuinely file-level error: no row to point to
+                field = ".".join(str(part) for part in loc) if loc else "unknown"
+                lines.append(f"  File-level ({field}): {msg}")
 
         # Add truncation message if needed
         if len(all_errors) > MAX_ERRORS_DISPLAYED:
