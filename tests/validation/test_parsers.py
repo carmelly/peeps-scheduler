@@ -89,6 +89,26 @@ class TestParseEventName:
         with pytest.raises(ValueError, match=r"invalid event duration"):
             parse_event_name(event_name, ctx.year, ctx.tz)
 
+    @pytest.mark.parametrize(
+        "event_name",
+        [
+            "Saturday January 4 (Zoom link TBD) - 1pm",
+            "Saturday (doors open early) January 4 - 1pm",
+            "Saturday January 4 - 1pm (soundcheck 6 to 7) to 3pm",
+            "Saturday January 4 - 1pm to 3pm (topic: advanced techniques)",
+        ],
+    )
+    def test_parenthetical_text_ignored(self, event_name, ctx):
+        """Test that parenthetical asides are stripped before parsing."""
+        parsed: EventSpec = parse_event_name(event_name, ctx.year, ctx.tz)
+        assert parsed.start == datetime(2020, 1, 4, 13, 0, tzinfo=ctx.tz)
+
+    def test_parenthetical_text_preserved_in_raw(self, ctx):
+        """Test that EventSpec.raw retains the original unstripped string."""
+        event_name = "Saturday January 4 (Zoom link TBD) - 1pm"
+        parsed: EventSpec = parse_event_name(event_name, ctx.year, ctx.tz)
+        assert parsed.raw == event_name
+
 
 @pytest.mark.unit
 class TestParseRole:
@@ -148,8 +168,12 @@ class TestParseSwitchPreference:
     """Test parser function parse_switch_preference()."""
 
     PRIMARY_ONLY_STR = "I only want to be scheduled in my primary role"
-    SWITCH_IF_PRIMARY_FULL_STR = "I'm happy to dance my secondary role if it lets me attend when my primary is full"
-    SWITCH_IF_NEEDED_STR = "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    SWITCH_IF_PRIMARY_FULL_STR = (
+        "I'm happy to dance my secondary role if it lets me attend when my primary is full"
+    )
+    SWITCH_IF_NEEDED_STR = (
+        "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    )
 
     @pytest.mark.parametrize(
         "input_value,expected",

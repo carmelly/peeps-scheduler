@@ -19,6 +19,10 @@ def parse_event_name(event_name: str, year: int, tz: datetime.tzinfo) -> EventSp
         raise ValueError('invalid event name: ""')
 
     raw = event_name
+
+    # Remove parenthetical asides (e.g. venue notes) before parsing
+    event_name = re.sub(r"\([^)]*\)", "", event_name)
+
     # Remove ordinal suffixes from date
     event_name = event_name.strip().lower()
     event_name = re.sub(r"(\d)(st|nd|rd|th)", r"\1", event_name)
@@ -134,9 +138,15 @@ def parse_switch_preference(value: str) -> SwitchPreference:
 
     if stripped == "I only want to be scheduled in my primary role":
         return SwitchPreference.PRIMARY_ONLY
-    elif stripped == "I'm happy to dance my secondary role if it lets me attend when my primary is full":
+    elif (
+        stripped
+        == "I'm happy to dance my secondary role if it lets me attend when my primary is full"
+    ):
         return SwitchPreference.SWITCH_IF_PRIMARY_FULL
-    elif stripped == "I'm willing to dance my secondary role only if it's needed to enable filling a session":
+    elif (
+        stripped
+        == "I'm willing to dance my secondary role only if it's needed to enable filling a session"
+    ):
         return SwitchPreference.SWITCH_IF_NEEDED
     else:
         raise ValueError(f"Invalid switch preference: {value}")
