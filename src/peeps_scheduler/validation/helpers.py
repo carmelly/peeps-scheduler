@@ -1,4 +1,3 @@
-
 def normalize_email_for_match(email: str) -> str:
     """
     Normalize email for matching.
@@ -22,6 +21,14 @@ def normalize_email_for_match(email: str) -> str:
 
 
 def validate_unique(items, key=None, msg="duplicate value"):
-    values = [key(item) if key else item for item in items]
-    if len(values) != len(set(values)):
-        raise ValueError(msg)
+    seen = set()
+    duplicates = set()
+
+    for item in items:
+        value = key(item) if key else item
+        if value in seen:
+            duplicates.add(value)
+        else:
+            seen.add(value)
+    if duplicates:
+        raise ValueError(f"{msg}: {', '.join(str(d) for d in duplicates)}")
