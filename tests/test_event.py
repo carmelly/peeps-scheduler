@@ -11,7 +11,7 @@ Following testing philosophy:
 import datetime
 import pytest
 import peeps_scheduler.constants as constants
-from peeps_scheduler.models import Event, Peep, Role
+from peeps_scheduler.models import Event, Peep, Role, SwitchPreference
 
 
 class TestEventAttendeeManagement:
@@ -288,6 +288,120 @@ class TestEventRoleBalancing:
         assert len(event.leaders) == 2
         assert len(event.followers) == 2  # Balanced to match leaders
         assert len(event.alt_followers) == 3  # Excess followers become alternates
+
+    def test_switch_attendee_role_moves_between_roles(self, event_factory, peep_factory):
+        """Test that switch_attendee_role moves a seated peep without touching alt lists."""
+        event = event_factory()
+        follower = peep_factory(id=1, role=Role.FOLLOWER)
+        event.add_attendee(follower, Role.FOLLOWER)
+
+        event.switch_attendee_role(follower, Role.FOLLOWER)
+
+        assert follower in event.leaders
+        assert follower not in event.followers
+        assert follower in event.attendees  # still seated, order untouched
+        assert len(event.alt_leaders) == 0
+        assert len(event.alt_followers) == 0
+
+    def test_balance_roles_switches_willing_peep_when_gap_allows(self, event_factory, peep_factory):
+        """Test that a SWITCH_IF_PRIMARY_FULL peep is switched instead of demoted when the gap is >= 2."""
+        event = event_factory()
+        leaders = [peep_factory(id=i + 1, role=Role.LEADER) for i in range(2)]
+        followers = [peep_factory(id=i + 11, role=Role.FOLLOWER) for i in range(5)]
+        followers[-1].switch_pref = SwitchPreference.SWITCH_IF_PRIMARY_FULL
+
+        for leader in leaders:
+            event.add_attendee(leader, Role.LEADER)
+        for follower in followers:
+            event.add_attendee(follower, Role.FOLLOWER)
+
+        event.balance_roles()
+
+        assert len(event.leaders) == 3
+        assert len(event.followers) == 3
+        assert followers[-1] in event.leaders  # switched, not demoted
+        assert followers[-2] in event.alt_followers  # gap dropped to 1, so this one demotes
+        assert len(event.alt_followers) == 1
+
+    def test_balance_roles_respects_effective_max_role_cap(self, event_factory, peep_factory):
+        """Test that a passed-in effective_max_role (e.g. from a target_max sweep trial) caps
+        switching, not the event's own higher max_role - otherwise a switch could seat someone
+        past the ceiling that trial is supposed to represent."""
+        event = event_factory()  # 120 min -> max_role 7, well above the effective cap used here
+        leaders = [peep_factory(id=i + 1, role=Role.LEADER) for i in range(2)]
+        followers = [peep_factory(id=i + 11, role=Role.FOLLOWER) for i in range(5)]
+        followers[-1].switch_pref = SwitchPreference.SWITCH_IF_PRIMARY_FULL
+
+        for leader in leaders:
+            event.add_attendee(leader, Role.LEADER)
+        for follower in followers:
+            event.add_attendee(follower, Role.FOLLOWER)
+
+        event.balance_roles(effective_max_role=2)  # leader role is already at this cap
+
+        assert len(event.leaders) == 2
+        assert len(event.followers) == 2
+        assert followers[-1] in event.alt_followers  # demoted, not switched - leader role capped
+        assert followers[-1] not in event.leaders
+
+    def test_balance_roles_does_not_switch_when_gap_is_one(self, event_factory, peep_factory):
+        """Test that switching is skipped when the gap is 1, since a switch would only flip it."""
+        event = event_factory()
+        leaders = [peep_factory(id=i + 1, role=Role.LEADER) for i in range(2)]
+        followers = [peep_factory(id=i + 11, role=Role.FOLLOWER) for i in range(3)]
+        followers[-1].switch_pref = SwitchPreference.SWITCH_IF_PRIMARY_FULL
+
+        for leader in leaders:
+            event.add_attendee(leader, Role.LEADER)
+        for follower in followers:
+            event.add_attendee(follower, Role.FOLLOWER)
+
+        event.balance_roles()
+
+        assert len(event.leaders) == 2
+        assert len(event.followers) == 2
+        assert followers[-1] in event.alt_followers  # demoted, not switched
+        assert followers[-1] not in event.leaders
+
+    def test_balance_roles_ignores_switch_if_needed(self, event_factory, peep_factory):
+        """Test that SWITCH_IF_NEEDED peeps are not switched during rebalancing."""
+        event = event_factory()
+        leaders = [peep_factory(id=i + 1, role=Role.LEADER) for i in range(2)]
+        followers = [peep_factory(id=i + 11, role=Role.FOLLOWER) for i in range(4)]
+        followers[-1].switch_pref = SwitchPreference.SWITCH_IF_NEEDED
+
+        for leader in leaders:
+            event.add_attendee(leader, Role.LEADER)
+        for follower in followers:
+            event.add_attendee(follower, Role.FOLLOWER)
+
+        event.balance_roles()
+
+        assert followers[-1] in event.alt_followers  # demoted, SWITCH_IF_NEEDED doesn't qualify
+        assert followers[-1] not in event.leaders
+
+    def test_balance_roles_multi_step_switch_then_demote(self, event_factory, peep_factory):
+        """Test the full switch-then-demote sequence: closing a gap of 3 takes one switch (which
+        halves the gap) and one demotion (closing the remaining gap of 1), leaving the
+        earliest-seated excess follower untouched."""
+        event = event_factory()  # 120 min -> max_role 7, so followers is capped at 7
+        leaders = [peep_factory(id=i + 1, role=Role.LEADER) for i in range(4)]
+        followers = [peep_factory(id=i + 11, role=Role.FOLLOWER) for i in range(7)]
+        # last-seated is switch-willing, matching the real Phoebe/Cora/Bailey scenario
+        followers[-1].switch_pref = SwitchPreference.SWITCH_IF_PRIMARY_FULL
+
+        for leader in leaders:
+            event.add_attendee(leader, Role.LEADER)
+        for follower in followers:
+            event.add_attendee(follower, Role.FOLLOWER)
+
+        event.balance_roles()
+
+        assert len(event.leaders) == 5
+        assert len(event.followers) == 5
+        assert followers[-1] in event.leaders  # switched (gap was 3)
+        assert followers[-2] in event.alt_followers  # demoted (gap dropped to 1)
+        assert followers[-3] in event.followers  # never reached, balance closed before this one
 
 
 class TestEventDurationManagement:

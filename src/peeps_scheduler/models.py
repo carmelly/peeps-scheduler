@@ -352,25 +352,71 @@ class Event:
 
         self._attendee_order.remove(peep)
 
-    def balance_roles(self):
+    def switch_attendee_role(self, peep: Peep, from_role: Role):
+        """
+        Move an already-seated attendee to the opposite role.
+
+        Unlike demote/promote, the peep stays seated throughout - only their
+        role changes - so _attendee_order and the alternate lists are untouched.
+        """
+        to_role = from_role.opposite()
+        if from_role == Role.LEADER:
+            self._leaders.remove(peep)
+            self._followers.append(peep)
+        else:
+            self._followers.remove(peep)
+            self._leaders.append(peep)
+        logging.debug(
+            f"{peep.name} switched from {from_role.name} to {to_role.name} "
+            f"during rebalancing for Event {self.id} on {self.formatted_date()}"
+        )
+
+    def balance_roles(self, effective_max_role: int | None = None):
         """
         Ensures leaders and followers are balanced within an event.
-        If one group is larger, demote extras to alternates until balanced.
+
+        Repeatedly resolves the most-recently-seated peep in the larger role,
+        either by demoting them to alternate or, if they're willing and it
+        actually helps, switching them into the smaller role instead.
+
+        A switch moves the leader/follower gap by 2 (-1 from the larger role,
+        +1 to the smaller); a demotion only moves it by 1. When the gap is
+        exactly 1, switching would just flip which role is ahead rather than
+        close it, so we fall back to demotion in that case.
+
+        SWITCH_IF_NEEDED is deliberately not honored here - that preference
+        is for filling an otherwise-underfilled role so the session can run
+        at all, not for retaining an individual peep once minimums are met.
+
+        effective_max_role caps the destination role's headcount for a switch.
+        It defaults to this event's own max_role, but callers running a
+        target_max sweep must pass the trial's lower cap - otherwise a switch
+        could seat someone past the ceiling that trial is supposed to test,
+        corrupting the comparison against other target_max trials.
         """
-        # Copy of current role lists for balance tracking
-        leaders = list(self._leaders)
-        followers = list(self._followers)
+        max_role_cap = effective_max_role if effective_max_role is not None else self.max_role
 
-        if len(leaders) != len(followers):
-            larger_role = Role.LEADER if len(leaders) > len(followers) else Role.FOLLOWER
-            larger_list = leaders if larger_role == Role.LEADER else followers
+        while len(self._leaders) != len(self._followers):
+            larger_role = Role.LEADER if len(self._leaders) > len(self._followers) else Role.FOLLOWER
+            smaller_role = larger_role.opposite()
+            larger_list = self._leaders if larger_role == Role.LEADER else self._followers
 
-            while len(leaders) != len(followers):
-                if not larger_list:
-                    logging.warning(f"Unable to balance roles for event {self.id}.")
-                    break
-                alt_peep = larger_list.pop()
-                self.demote_attendee_to_alt(alt_peep, larger_role)
+            if not larger_list:
+                logging.warning(f"Unable to balance roles for event {self.id}.")
+                break
+
+            candidate = larger_list[-1]
+            gap = abs(len(self._leaders) - len(self._followers))
+            can_switch = (
+                gap >= 2
+                and candidate.switch_pref == SwitchPreference.SWITCH_IF_PRIMARY_FULL
+                and self.num_attendees(smaller_role) < max_role_cap
+            )
+
+            if can_switch:
+                self.switch_attendee_role(candidate, larger_role)
+            else:
+                self.demote_attendee_to_alt(candidate, larger_role)
 
         # Post-check: roles must now be balanced and meet minimums
         if len(self.leaders) != len(self.followers):

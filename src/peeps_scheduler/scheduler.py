@@ -120,8 +120,8 @@ class Scheduler:
 
             # Only consider events that meet the absolute minimums
             if event.meets_absolute_min():
-                # Balance roles (demoting extras if needed)
-                event.balance_roles()
+                # Balance roles (switching or demoting extras as needed)
+                event.balance_roles(effective_max_role)
 
                 # If underfilled for event-specific duration, try to downgrade
                 if not event.meets_min():
