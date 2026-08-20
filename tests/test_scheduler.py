@@ -8,6 +8,7 @@ Following testing philosophy:
 - One concept per test with descriptive names
 """
 
+import datetime
 import json
 import tempfile
 from pathlib import Path
@@ -707,6 +708,71 @@ class TestSchedulerSequenceEvaluation:
         assert total_alternates > 0, (
             "Should have alternates when event is full but more peeps are available"
         )
+
+    def test_capping_below_max_role_can_raise_num_unique_attendees(
+        self, event_factory, peep_factory
+    ):
+        """Test the reason run() sweeps target_max instead of evaluating once at each
+        event's real max_role (scheduler.py:421): assignment is one greedy pass in
+        peep-list order, and event_limit is a budget shared across the whole
+        sequence. If an early event is allowed to fill past what it strictly needs,
+        it can spend a scarce peep's only slot - starving a later event below
+        ABS_MIN_ROLE and dropping it entirely, even though a lower cap would have
+        left that peep free for the later event instead.
+
+        Reconstructed from git history (commit 39bd79d) and 2025-06 production
+        data, where Followers were consistently the scarce role vs. Leaders.
+        """
+        # 90min -> min_role=4, max_role=5; ABS_MIN_ROLE=4 is the event-drop threshold
+
+        def build_sequence():
+            # fresh events each call - evaluate_sequence mutates event state, so
+            # reusing events across the two trials would leak attendees between them
+            event_a = event_factory(
+                id=1, duration_minutes=90, date=datetime.datetime(2025, 6, 7, 15, 0)
+            )
+            event_b = event_factory(
+                id=2, duration_minutes=90, date=datetime.datetime(2025, 6, 21, 15, 0)
+            )
+            # event_a has 5 leaders available (one more than it needs) so it can
+            # absorb a 5th follower without going unbalanced when uncapped
+            leaders_a = [
+                peep_factory(id=i, role=Role.LEADER, availability=[event_a]) for i in range(1, 6)
+            ]
+            leaders_b = [
+                peep_factory(id=i, role=Role.LEADER, availability=[event_b]) for i in range(6, 10)
+            ]
+            followers_a = [
+                peep_factory(id=i, role=Role.FOLLOWER, availability=[event_a])
+                for i in range(10, 14)
+            ]
+            # available for both events but can only be seated at one
+            scarce_follower = peep_factory(
+                id=14, role=Role.FOLLOWER, availability=[event_a, event_b], event_limit=1
+            )
+            # one short of ABS_MIN_ROLE for event_b without the scarce follower
+            followers_b = [
+                peep_factory(id=i, role=Role.FOLLOWER, availability=[event_b])
+                for i in range(15, 18)
+            ]
+            # order matters: event_a fills its own 4 followers before reaching the
+            # scarce one, so only a cap >= 5 lets event_a take them
+            peeps = leaders_a + leaders_b + followers_a + [scarce_follower] + followers_b
+            return EventSequence([event_a, event_b], peeps)
+
+        scheduler = create_scheduler()
+
+        scheduler.target_max = None  # real max_role (5): event_a can overfill onto the scarce peep
+        sequence_uncapped = build_sequence()
+        scheduler.evaluate_sequence(sequence_uncapped)
+
+        scheduler.target_max = constants.ABS_MIN_ROLE  # 4: event_a takes only what it needs
+        sequence_capped = build_sequence()
+        scheduler.evaluate_sequence(sequence_capped)
+
+        assert len(sequence_uncapped.valid_events) == 1  # event_b starved, dropped
+        assert len(sequence_capped.valid_events) == 2  # scarce follower left free for event_b
+        assert sequence_capped.num_unique_attendees > sequence_uncapped.num_unique_attendees
 
 
 class TestSchedulerSequenceSelection:
